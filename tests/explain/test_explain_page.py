@@ -146,3 +146,8 @@ def test_html_is_offline_static_page() -> None:
     assert "visualize" not in html.lower()
     assert "ocr_url.txt" not in html
     assert "max-width: 880px" in css
+
+
+def test_readme_points_to_explainer() -> None:
+    text = README.read_text(encoding="utf-8")
+    assert "explain/index.html" in text

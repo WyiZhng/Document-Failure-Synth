@@ -19,3 +19,5 @@ python3 -m src.synth.runner --config src/synth/config/synth.yaml
 ```
 
 合成结果默认写到 `data/output/`。
+
+讲解页（无需安装，浏览器打开即可）：[`explain/index.html`](explain/index.html)
