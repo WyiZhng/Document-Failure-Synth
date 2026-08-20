@@ -83,3 +83,66 @@ def test_source_page_image_is_copied_file() -> None:
     assert EXPLAIN_PNG.is_file()
     assert not EXPLAIN_PNG.is_symlink()
     assert EXPLAIN_PNG.stat().st_size > 100000
+
+
+REQUIRED_IDS = [
+    "data-error",
+    "input",
+    "step-1",
+    "step-2",
+    "step-3",
+    "step-4",
+    "step-5",
+    "step-6",
+    "output",
+    "origin-input",
+    "source-nodes",
+    "source-blocks",
+    "html-zh",
+    "html-pair",
+    "stats",
+    "id-map-body",
+    "artifact-origin",
+    "artifact-label",
+    "artifact-tree",
+    "artifact-prelabel",
+]
+
+
+def test_html_is_offline_static_page() -> None:
+    html = EXPLAIN_HTML.read_text(encoding="utf-8")
+    css = EXPLAIN_CSS.read_text(encoding="utf-8")
+    assert 'href="styles.css"' in html
+    assert "<script src=\"data.js\"></script>" in html
+    assert "type=\"module\"" not in html
+    assert "fetch(" not in html
+    assert "innerHTML" not in html
+    assert "https://" not in html
+    assert "http://" not in html
+    assert "document-failure-synth 在做什么" in html
+    assert 'src="assets/raw-page-1.png"' in html
+    assert 'alt="源文档第 1 页"' in html
+    assert "textContent" in html
+    assert "请打开整个 `explain/` 目录下的 `index.html`，不要只拷走这一个文件" in html
+    for section_id in REQUIRED_IDS:
+        assert f'id="{section_id}"' in html
+    for href in ["#input", "#step-1", "#step-2", "#step-3", "#step-4", "#step-5", "#step-6", "#output"]:
+        assert f'href="{href}"' in html
+    assert "src/synth/material.py" in html
+    assert "src/synth/html_builder.py" in html
+    assert "src/synth/rewrite.py" in html
+    assert "src/synth/paginate.js" in html
+    assert "src/synth/validate.py" in html
+    assert "src/synth/gt_builder.py" in html
+    assert "Keep every original element with data-node-id" in html
+    assert "zhNeedsPage || enNeedsPage" in html
+    assert "missing en block" in html
+    assert 'f"p{page}-b{index}"' in html
+    assert "落盘为" in html and "rewritten.html" in html
+    assert "少 1 个 en" in html
+    assert "(1000 − 2×40 − 24) / 2 = 448" in html
+    assert "40–488" in html and "512–960" in html
+    assert "本讲解页用步骤 4 示意图代替" in html
+    assert "visualize" not in html.lower()
+    assert "ocr_url.txt" not in html
+    assert "max-width: 880px" in css

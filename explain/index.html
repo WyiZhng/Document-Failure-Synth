@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>document-failure-synth 在做什么</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <nav>
+    <a href="#input">输入</a>
+    <a href="#step-1">1</a>
+    <a href="#step-2">2</a>
+    <a href="#step-3">3</a>
+    <a href="#step-4">4</a>
+    <a href="#step-5">5</a>
+    <a href="#step-6">6</a>
+    <a href="#output">输出</a>
+  </nav>
+  <main>
+    <p id="data-error" class="banner" hidden>
+      请打开整个 `explain/` 目录下的 `index.html`，不要只拷走这一个文件
+    </p>
+    <h1>document-failure-synth 在做什么</h1>
+    <p>从已有中文 fillin 树合成左栏中文、右栏英文的双栏文档，产出与真实标注目录同构的五件套：origin / prelabel / label / multi-page-final / images_path。</p>
+    <p>用途：给下游 Trainer 提供双栏双语失效样本。本仓止于标注产物，不再生成 train.jsonl。</p>
+    <p class="muted">本页只看一份样例：源 doc_21f4dc879ffd（policy_document）→ synth_001，seed 52。</p>
+
+    <h2 id="input">输入</h2>
+    <div class="split">
+      <div>
+        <img src="assets/raw-page-1.png" alt="源文档第 1 页" />
+        <p class="muted">源文件拷贝自 data/source/task_001_002_raw/images_path/raw-page-1.png</p>
+      </div>
+      <div>
+        <h3>origin.json</h3>
+        <pre id="origin-input"></pre>
+        <h3>fillin 节点摘录</h3>
+        <pre id="source-nodes"></pre>
+      </div>
+    </div>
+    <ul class="muted">
+      <li>源树共 8 页；配置 max_source_pages: 4，只用页 0–3。</li>
+      <li>任何非空 link_to 的 case 直接拒绝。</li>
+      <li>image / chart / seal / table 要从源页图按 bbox 裁切；缺页图会在这一步失败。</li>
+    </ul>
+
+    <h2>处理过程</h2>
+
+    <div class="step" id="step-1">
+      <div class="num">1</div>
+      <div>
+        <h3>加载素材</h3>
+        <p>读 fillin 树和 origin，展平成块。图、章、印、表按 bbox 从源页图裁成小图，供后面 HTML 引用。</p>
+        <p class="muted">本步输入：上面三个节点。</p>
+        <p class="muted">本步输出：SourceBlock 列表。</p>
+        <pre id="source-blocks"></pre>
+        <p class="module">src/synth/material.py · load_material</p>
+        <pre><code>tree = load_fillin_tree(case_dir)
+_assert_no_link_to(tree)
+origin = json.loads((case_dir / ORIGIN_FILENAME).read_text(encoding="utf-8"))
+blocks: list[SourceBlock] = []
+for raw in iter_source_blocks(tree):
+    page = int(raw["page"])
+    if page >= cfg.max_source_pages:
+        continue
+    image_path = _crop_image_block(...) if raw["category"] in IMAGE_CATEGORIES else None
+    blocks.append(SourceBlock(id=raw["id"], page=page, category=raw["category"], text=raw["text"], image_path=image_path))</code></pre>
+      </div>
+    </div>
+    <p class="arrow">下一块把这些块变成带标记的 HTML。</p>
+
+    <div class="step" id="step-2">
+      <div class="num">2</div>
+      <div>
+        <h3>拼源 HTML</h3>
+        <p>还不管双栏。每个块打上 data-node-id / data-category / data-lang="zh"，方便后面校对：一个都没丢。</p>
+        <p class="muted">本步输入：块列表。本步输出：只有中文的 HTML。</p>
+        <pre id="html-zh"></pre>
+        <p class="module">src/synth/html_builder.py · build_source_html</p>
+        <pre><code>if block.page != current_page:
+    parts.append(f'&lt;section class="src-page" data-src-page="{current_page}"&gt;')
+attrs = (
+    f'data-node-id="{html.escape(block.id, quote=True)}" '
+    f'data-category="{html.escape(block.category, quote=True)}" '
+    f'data-lang="zh"'
+)
+if block.image_path:
+    parts.append(f'&lt;img class="block" {attrs} src="{src}" alt="" /&gt;')
+else:
+    parts.append(f'&lt;div class="block" {attrs}&gt;{html.escape(block.text)}&lt;/div&gt;')</code></pre>
+      </div>
+    </div>
+    <p class="arrow">然后才轮到模型：只插英文，不排版。</p>
+
+    <div class="step" id="step-3">
+      <div class="num">3</div>
+      <div>
+        <h3>LLM 插英文</h3>
+        <p>这是整条链路里唯一的模型调用。每个源页 section 单独翻译。中文节点不许改；应译类后面插一个相同 data-node-id 的英文兄弟。图章表格页眉页脚不译。</p>
+        <p class="muted">本步输入：步骤 2 的中文 HTML。本步输出落盘为 rewritten.html。印章没有 en。</p>
+        <pre id="html-pair"></pre>
+        <p class="module">src/synth/rewrite.py · rewrite_html</p>
+        <pre><code>HARD RULES:
+1. Keep every original element with data-node-id exactly as-is. Never drop, rename, or change any attribute (including src, class).
+2. Original Chinese blocks have data-lang="zh". Do not modify their text content.
+3. For EACH block with data-lang="zh" AND data-category in {translate_categories} (text blocks only, NOT img):
+   insert immediately AFTER it one English translation element with the SAME data-node-id.
+4. Do NOT add English blocks for image/chart/seal/table/header/footer blocks or any img element.</code></pre>
+      </div>
+    </div>
+    <p class="arrow">几何交给浏览器脚本，不交给模型。</p>
+
+    <div class="step" id="step-4">
+      <div class="num">4</div>
+      <div>
+        <h3>分页截图</h3>
+        <p>Playwright 打开 HTML，注入 paginate.js：左栏中文、右栏英文。同一 data-node-id 的 zh/en 必须同页；任一栏放不下就整对翻页。截图像素空间就是后面的 bbox。</p>
+        <p class="muted">本步输入：成对 HTML。样例目录没有合成 PNG，用示意图代替。</p>
+        <div class="spread-wrap">
+          <div class="spread-canvas">
+            <div class="col">中文 x=40–488</div>
+            <div class="gap"></div>
+            <div class="col">英文 x=512–960</div>
+          </div>
+        </div>
+        <p class="muted">栏宽 (1000 − 2×40 − 24) / 2 = 448 · column_gap=24</p>
+        <p class="module">src/synth/paginate.js · paginateDocument（由 render.render_pages 注入）</p>
+        <pre><code>const zhNeedsPage = Boolean(pair.zh) && !fits(leftY, zhH) && leftY > margin;
+const enNeedsPage = Boolean(pair.en) && !fits(rightY, enH) && rightY > margin;
+if (zhNeedsPage || enNeedsPage) newPage();</code></pre>
+      </div>
+    </div>
+    <p class="arrow">排完必须过校验，不过就整份丢掉。</p>
+
+    <div class="step" id="step-5">
+      <div class="num">5</div>
+      <div>
+        <h3>校验</h3>
+        <p>中文必须还是源树（id / 顺序 / 类别 / 原文）；该译的恰好一个英文；同 id 的 zh/en 同页且 x 不重叠。不过就整份丢掉重试。</p>
+        <p class="muted">本步输入：源树 + PlacedBlock。本份统计：少 1 个 en 是因为印章不译。</p>
+        <pre id="stats"></pre>
+        <p class="module">src/synth/validate.py · validate_doc</p>
+        <pre><code>if _is_translatable(zh.category, cfg):
+    if len(en_list) == 0:
+        errors.append(f"missing en block: {node_id}")
+    elif len(en_list) &gt; 1:
+        errors.append(f"duplicate en block: {node_id}")
+elif en_list:
+    errors.append(f"unexpected en block for non-translatable: {node_id}")
+if en.page != zh.page:
+    errors.append(
+        f"zh/en page split for {zh.node_id}: zh={zh.page} en={en.page}"
+    )</code></pre>
+      </div>
+    </div>
+    <p class="arrow">通过后按阅读序重编号，写成下游认得的树。</p>
+
+    <div class="step" id="step-6">
+      <div class="num">6</div>
+      <div>
+        <h3>写标注</h3>
+        <p>按阅读序重编号：页内先左栏中文，再右栏英文。双语树节点 member=[中文新id, 英文新id]，text 全空。然后对截图跑 PaddleOCR 得到 prelabel（探测器，不与 GT 对齐）。</p>
+        <p class="muted">本步输入：PlacedBlock。源文号 p0-b3 在合成树里拆成左右两个新 id。</p>
+        <table>
+          <thead>
+            <tr><th>源 id</th><th>角色</th><th>新 id</th><th>bbox x</th></tr>
+          </thead>
+          <tbody id="id-map-body"></tbody>
+        </table>
+        <p class="module">src/synth/gt_builder.py · _assign_ids</p>
+        <pre><code>for page in sorted(by_page):
+    ordered: list[PlacedBlock] = []
+    for lang in ("zh", "en"):
+        ordered.extend(sorted(by_page[page][lang], key=_sort_key))
+    for index, block in enumerate(ordered, start=1):
+        block.__dict__["new_id"] = f"p{page}-b{index}"
+        mapped[(block.node_id, block.lang)] = block</code></pre>
+      </div>
+    </div>
+
+    <h2 id="output">输出 · 五件套</h2>
+    <div class="cards">
+      <div class="card">
+        <h3>origin.json</h3>
+        <p>合成文档身份。真实跑通后 images_path 指向本份 images_path/。</p>
+        <pre id="artifact-origin"></pre>
+      </div>
+      <div class="card">
+        <h3>label.json</h3>
+        <p>页内块框（无字）。</p>
+        <pre id="artifact-label"></pre>
+      </div>
+      <div class="card">
+        <h3>multi-page-final.json</h3>
+        <p>双语树。文号节点 member 原文在前、译文在后，text 留空。</p>
+        <pre id="artifact-tree"></pre>
+      </div>
+      <div class="card">
+        <h3>prelabel.json</h3>
+        <p>OCR 预标注（有字），与 GT 框不必对齐。</p>
+        <pre id="artifact-prelabel"></pre>
+      </div>
+      <div class="card">
+        <h3>images_path/</h3>
+        <p>截图像素空间。真实跑通后为 raw-page-N.png（N 从 1），bbox 与图同一坐标系。本讲解页用步骤 4 示意图代替。</p>
+      </div>
+    </div>
+  </main>
+  <script src="data.js"></script>
+  <script>
+    (function () {
+      var banner = document.getElementById("data-error");
+      if (typeof EXPLAIN === "undefined") {
+        banner.hidden = false;
+        return;
+      }
+      function fillJson(id, obj) {
+        document.getElementById(id).textContent = JSON.stringify(obj, null, 2);
+      }
+      function fillText(id, text) {
+        document.getElementById(id).textContent = text;
+      }
+      fillJson("origin-input", EXPLAIN.originInput);
+      fillJson("source-nodes", EXPLAIN.sourceNodes);
+      fillJson("source-blocks", EXPLAIN.sourceBlocks);
+      fillText("html-zh", EXPLAIN.htmlZh);
+      fillText("html-pair", EXPLAIN.htmlPair);
+      fillJson("stats", EXPLAIN.stats);
+      fillJson("artifact-origin", EXPLAIN.artifacts.origin);
+      fillJson("artifact-label", EXPLAIN.artifacts.label);
+      fillJson("artifact-tree", EXPLAIN.artifacts.treeNode);
+      fillJson("artifact-prelabel", EXPLAIN.artifacts.prelabel);
+      var tbody = document.getElementById("id-map-body");
+      EXPLAIN.idMap.forEach(function (row) {
+        var tr = document.createElement("tr");
+        [row.sourceId, row.role, row.newId, row.bboxX].forEach(function (cell) {
+          var td = document.createElement("td");
+          td.textContent = cell;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    })();
+  </script>
+</body>
+</html>
