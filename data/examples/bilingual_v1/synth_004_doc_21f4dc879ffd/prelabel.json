@@ -1,0 +1,578 @@
+{
+  "pages": [
+    {
+      "page_index": 0,
+      "blocks": [
+        {
+          "block_id": 1,
+          "bbox": [
+            129.0,
+            43.0,
+            399.0,
+            71.0
+          ],
+          "text": "山东省工业和信息化厅文件",
+          "category": "doc_title",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 2,
+          "bbox": [
+            37.0,
+            84.0,
+            216.0,
+            107.0
+          ],
+          "text": "鲁工信消〔2021〕77号",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 3,
+          "bbox": [
+            36.0,
+            120.0,
+            490.0,
+            185.0
+          ],
+          "text": "山东省工业和信息化厅 关于印发山东省特色优\n势食品产业集聚区 培育实施方案的通知",
+          "category": "paragraph_title",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 4,
+          "bbox": [
+            35.0,
+            196.0,
+            490.0,
+            245.0
+          ],
+          "text": "各市工业和信息化局：现将《山东省特色优势食品产业集聚区培育实施方案》印发给你们，请认真贯彻执行。",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 5,
+          "bbox": [
+            37.0,
+            255.0,
+            151.0,
+            277.0
+          ],
+          "text": "(此件主动公开)",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 6,
+          "bbox": [
+            65.0,
+            291.0,
+            314.0,
+            524.0
+          ],
+          "text": "",
+          "category": "seal",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 7,
+          "bbox": [
+            43.0,
+            397.0,
+            357.0,
+            433.0
+          ],
+          "text": "山东省工业和信息化厅",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 8,
+          "bbox": [
+            79.0,
+            444.0,
+            312.0,
+            475.0
+          ],
+          "text": "2021年4月29日",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 9,
+          "bbox": [
+            36.0,
+            537.0,
+            487.0,
+            602.0
+          ],
+          "text": "山东省特色优势食品产业集聚区培育实施方案\n第一章 总 则",
+          "category": "paragraph_title",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 10,
+          "bbox": [
+            35.0,
+            615.0,
+            492.0,
+            844.0
+          ],
+          "text": "第一条 为贯彻省委、省政府关于促进食品产业高质量发展战略部署，按照《山东省人民政府办公厅关于加快食品产业高质量发展若干措施的通知》（鲁政办字〔2020〕171号）要求，加快建设和培育一批高质量发展的特色优势食品产业集聚区。通过培育认定省级特色优势食品产业集群、省级特色优势食品产业强县（市、区）、省级特色优势食品产业强镇和省级特色优势食品产业基地（以下简称产业集群、强县、强镇、基地），引领带动我省食品产业基础加快向高级化演进，不断提高产业链和供应链现代化水平，制定本方案。",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 11,
+          "bbox": [
+            34.0,
+            853.0,
+            491.0,
+            1005.0
+          ],
+          "text": "第二条 本方案所称特色优势食品产业集聚区，是指经省工业和信息化厅认定公布的，食品产业规模居全省乃至全国同行业前列，以食品产业为支柱，依托市、县（市、区）、乡镇或经济开发区集中管理，公共服务配套体系完善，产业链、供应链持续完善，龙头骨干企业带动作用突出，形成显著产业特色、区域优势和持续竞争力的产业集群、强县、强镇和基地。",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 12,
+          "bbox": [
+            35.0,
+            1016.0,
+            490.0,
+            1123.0
+          ],
+          "text": "第三条 省级产业集群、强县、强镇和基地的申报遵从自愿原则。省工业和信息化厅会同有关单位对省级产业集群、强县、强镇和基地进行指导培育和认定管理。鼓励各级各部门给予奖励扶持。",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 13,
+          "bbox": [
+            36.0,
+            1133.0,
+            230.0,
+            1158.0
+          ],
+          "text": "第二章 培育和申报条件",
+          "category": "paragraph_title",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 14,
+          "bbox": [
+            35.0,
+            1170.0,
+            463.0,
+            1218.0
+          ],
+          "text": "第四条 省级产业集群、强县、强镇和基地申报需满足以下条件：\nDocument of the Department of Industry and Information Technology of Shandong Province",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 15,
+          "bbox": [
+            516.0,
+            41.0,
+            952.0,
+            79.0
+          ],
+          "text": "",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 16,
+          "bbox": [
+            508.0,
+            87.0,
+            722.0,
+            105.0
+          ],
+          "text": "Lu Gongxin Xiao [2021] No. 77",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 17,
+          "bbox": [
+            514.0,
+            114.0,
+            957.0,
+            208.0
+          ],
+          "text": "Notice of the Department of Industry and Information Technology of Shandong Province on Printing and Distributing the Implementation Plan for Cultivating Characteristic and Advantageous Food Industry Clusters in Shandong Province",
+          "category": "paragraph_title",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 18,
+          "bbox": [
+            507.0,
+            216.0,
+            961.0,
+            311.0
+          ],
+          "text": "To the Bureaus of Industry and Information Technology of all cities: The \"Implementation Plan for Cultivating Characteristic and Advantageous Food Industry Clusters in Shandong Province\" is hereby printed and distributed to you. Please implement it conscientiously.",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 19,
+          "bbox": [
+            509.0,
+            320.0,
+            779.0,
+            337.0
+          ],
+          "text": "(This document is voluntarily disclosed)",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 20,
+          "bbox": [
+            527.0,
+            347.0,
+            945.0,
+            404.0
+          ],
+          "text": "Implementation Plan for Cultivating Characteristic and Advantageous Food Industry Agglomeration Areas in Shandong Province",
+          "category": "paragraph_title",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 21,
+          "bbox": [
+            508.0,
+            412.0,
+            729.0,
+            431.0
+          ],
+          "text": "Chapter I General Provisions",
+          "category": "paragraph_title",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 22,
+          "bbox": [
+            506.0,
+            439.0,
+            962.0,
+            839.0
+          ],
+          "text": "Article 1 To implement the strategic deployment of the Provincial Party Committee and the Provincial People's Government on promoting the high-quality development of the food industry, and in accordance with the requirements of the \"Notice of the General Office of the People's Government of Shandong Province on Several Measures to Accelerate the High-Quality Development of the Food Industry\" (Lu Zheng Ban Zi [2020] No. 171), this plan is formulated to accelerate the construction and cultivation of a batch of characteristic and advantageous food industry agglomeration areas with high-quality development. By cultivating and recognizing provincial-level characteristic and advantageous food industry clusters, provincial-level strong counties (cities, districts) in characteristic and advantageous food industries, provincial-level strong towns in characteristic and advantageous food industries, and provincial-level bases for characteristic and advantageous food industries (hereinafter referred to as industry clusters, strong counties, strong towns, and bases), this plan aims to lead and drive the accelerated evolution of the foundation of our province's food industry towards advanced stages, and continuously improve the modernization level of the industrial chain and supply chain.",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 23,
+          "bbox": [
+            506.0,
+            847.0,
+            962.0,
+            1114.0
+          ],
+          "text": "Article 2 The characteristic and advantageous food industry agglomeration areas referred to in this plan refer to industry clusters, strong counties, strong towns, and bases that are recognized and announced by the Provincial Department of Industry and Information Technology, where the scale of the food industry ranks among the forefront in the province and even nationwide in the same industry, with the food industry as the pillar, relying on centralized management by cities, counties (cities, districts), towns, or economic development zones, featuring a complete public service support system, continuously improving industrial and supply chains, prominent driving role of leading backbone enterprises, and forming significant industrial characteristics, regional advantages, and sustainable competitiveness.",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 24,
+          "bbox": [
+            506.0,
+            1121.0,
+            957.0,
+            1217.0
+          ],
+          "text": "Article 3 The application for provincial-level industry clusters, strong counties, strong towns, and bases shall follow the principle of voluntariness. The Provincial Department of Industry and Information Technology, in conjunction with relevant units, shall conduct reviews of provincial-level industry clusters, strong",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 25,
+          "bbox": [
+            507.0,
+            1225.0,
+            943.0,
+            1282.0
+          ],
+          "text": "Provide guidance, cultivation, and certification management for counties, strong towns, and bases. Encourage all levels and departments to offer rewards and support.",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 26,
+          "bbox": [
+            508.0,
+            1289.0,
+            887.0,
+            1308.0
+          ],
+          "text": "Chapter II: Cultivation and Application Conditions",
+          "category": "paragraph_title",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 27,
+          "bbox": [
+            507.0,
+            1317.0,
+            953.0,
+            1372.0
+          ],
+          "text": "Article 4: Applications for provincial-level industrial clusters, strong counties, strong towns, and bases must meet the following conditions:",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        }
+      ]
+    },
+    {
+      "page_index": 1,
+      "blocks": [
+        {
+          "block_id": 1,
+          "bbox": [
+            35.0,
+            41.0,
+            489.0,
+            142.0
+          ],
+          "text": "（一）产业特色鲜明。产业发展目标明确，空间布局和功能定位科学合理，发展边界清晰，可持续发展能力强。加快形成“产业+配套、平台+生态、技术+赋能”发展新模式。在省内外有较大影响力和较高知名度、美誉度。",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 2,
+          "bbox": [
+            35.0,
+            151.0,
+            489.0,
+            303.0
+          ],
+          "text": "（二）产业规模和经济效益突出。产业规模大、经济实力强，产业集聚度较高，形成较为完整的产业链和供应链，经济、社会、生态效益好。龙头骨干企业带动能力强，加快培植形成具有“链主”地位的领航型企业。产业集群、强县、强镇和基地产业链企业及配套企业分别在100户、50户、20户和5户以上，年营业收入分别达到100亿元、80亿元、20亿元和15亿元以上。",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 3,
+          "bbox": [
+            35.0,
+            313.0,
+            491.0,
+            362.0
+          ],
+          "text": "对营业收入居全省同行业第一位或居全国同行业前列，具有较大发展潜力的，可适当放宽条件。",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 4,
+          "bbox": [
+            35.0,
+            372.0,
+            491.0,
+            473.0
+          ],
+          "text": "（三）科技创新能力强、动力足。区域内有一批成长性、创新能力较强的优势企业，产学研协同创新成果突出，拥有市级以上科技成果奖、发明专利等。拥有公共技术服务平台或具有公共服务功能的平台型企业，具有引领行业发展的创新能力和动力。",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 5,
+          "bbox": [
+            35.0,
+            483.0,
+            482.0,
+            582.0
+          ],
+          "text": "骨干企业技术装备、科技创新能力在全省同行业处于先进水平，具有自主创新强劲动力。同时，聚焦领军企业、产业链薄弱环节、公共服务薄弱环节等领域，积极谋划、建设和储备产业项目，增强产业协同创新能力和动力。",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 6,
+          "bbox": [
+            35.0,
+            593.0,
+            492.0,
+            771.0
+          ],
+          "text": "（四）品牌影响力大并持续提升。主要产品具有较强的品牌影响力，获得业界认可度高的国内、国际大奖，在国际、国内市场有良好的销售业绩和市场基础。聚集区内企业的注册商标保护意识强，多项产品列入山东特色优质食品目录。注重打造特色鲜明、竞争力强、市场信誉好的区域品牌或公共品牌。区域内企业建立并持续改进食品安全危害分析与关键控制点体系，诚信体系、品牌建设体系不断完善。\n(1) Distinctive industrial characteristics. Clear industrial development goals, scientific and rational spatial layout and functional positioning, clear development boundaries, and strong sustainable development capabilities. Accelerate the formation of a new development model featuring \"industry + supporting services, platform + ecosystem, technology + empowerment.\" Possess significant influence and high-value (awareness) and reputation both within and outside the province.",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 7,
+          "bbox": [
+            506.0,
+            41.0,
+            953.0,
+            194.0
+          ],
+          "text": "",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 8,
+          "bbox": [
+            506.0,
+            201.0,
+            954.0,
+            430.0
+          ],
+          "text": "(2) Outstanding industrial scale and economic benefits. Large industrial scale, strong economic strength, high degree of industrial agglomeration, formation of relatively complete industrial and supply chains, and good economic, social, and ecological benefits. Strong driving capability by leading backbone enterprises; accelerate the cultivation of pioneering enterprises with \"chain leader\" status. Industrial clusters, strong counties, strong towns, and bases shall have more than 100, 50, 20, and 5 enterprises in their industrial chains and supporting enterprises respectively, with annual operating revenues reaching over RMB 10 billion, RMB 8 billion, RMB 2 billion, and RMB 1.5 billion respectively.",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 9,
+          "bbox": [
+            507.0,
+            437.0,
+            956.0,
+            514.0
+          ],
+          "text": "For those whose operating revenue ranks first in the province's same industry or among the top nationally in the same industry, and who possess significant development potential, the conditions may be appropriately relaxed.",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 10,
+          "bbox": [
+            506.0,
+            521.0,
+            956.0,
+            713.0
+          ],
+          "text": "(3) Strong scientific and technological innovation capability and sufficient momentum. The region has a group of advantageous enterprises with strong growth potential and innovation capabilities, outstanding achievements in collaborative innovation among industry, academia, and research, and holds municipal-level or higher scientific and technological achievement awards, invention patents, etc. Possess public technical service platforms or platform-type enterprises with public service functions, demonstrating the innovation capability and momentum to lead industry development.",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 11,
+          "bbox": [
+            507.0,
+            720.0,
+            956.0,
+            872.0
+          ],
+          "text": "The technical equipment and technological innovation capabilities of key enterprises are at an advanced level within the province's industry, demonstrating strong momentum for independent innovation. Meanwhile, focusing on leading enterprises, weak links in the industrial chain, and deficiencies in public services, the region actively plans, constructs, and reserves industrial projects to enhance collaborative innovation capacity and drive within the industry.",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 12,
+          "bbox": [
+            507.0,
+            879.0,
+            957.0,
+            1148.0
+          ],
+          "text": "(4) Significant and continuously enhancing brand influence. Main products possess strong brand influence, having received highly recognized domestic and international awards, and maintain good sales performance and market foundation in both international and domestic markets. Enterprises within the cluster have strong awareness of registered trademark protection, with multiple products listed in the Shandong Catalogue of Characteristic High-Quality Foods. Emphasis is placed on creating regional or public brands with distinct characteristics, strong competitiveness, and good market reputation. Enterprises in the region have established and continue to improve the Hazard Analysis and Critical Control Points (HACCP) system for food safety, while constantly perfecting integrity systems and brand development frameworks.",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        }
+      ]
+    },
+    {
+      "page_index": 2,
+      "blocks": [
+        {
+          "block_id": 1,
+          "bbox": [
+            34.0,
+            41.0,
+            492.0,
+            219.0
+          ],
+          "text": "（五）加快推进数字经济赋能。大力发展数字经济，应用新一代信息技术促进食品产业升级。龙头骨干企业在研发设计、生产管理、仓储物流、营销服务和品牌评价等环节信息化应用达到省内同行业先进水平。积极开展食品行业运行监测分析，为食品产业安全提供数据支撑。拥有工业互联网平台应用标杆企业或数字化转型标杆推广项目，产业集群、强县达到5个（含5个）以上，强镇达到2个（含2个）以上，基地达到1个（含1个）以上。",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 2,
+          "bbox": [
+            35.0,
+            228.0,
+            490.0,
+            304.0
+          ],
+          "text": "（六）健全培育管理体系。当地党委、政府列为重点支持发展产业，建立产业推进发展机构，制定并实施产业生态培育发展规划，出台务实、管用的扶持政策、保障措施。区域内基础条件（5）Accelerating the empowerment of the digital economy. Vigorously developing the digital economy and applying new-generation information technology to promote the upgrading of the food industry. The application of informatization by leading key enterprises in stages such as R&D design, production management, warehousing and logistics, marketing services, and brand evaluation has reached an advanced level within the province's industry. Actively conducting monitoring and analysis of food industry operations to provide data support for food industry safety. There are benchmark enterprises for industrial internet platform applications or benchmark promotion projects for digital transformation, with no fewer than 5 industrial clusters/strong counties, no fewer than 2 strong towns, and no fewer than 1 base.",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 3,
+          "bbox": [
+            507.0,
+            41.0,
+            964.0,
+            288.0
+          ],
+          "text": "",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        },
+        {
+          "block_id": 4,
+          "bbox": [
+            507.0,
+            295.0,
+            961.0,
+            430.0
+          ],
+          "text": "(6) Improving the cultivation and management system. The local party committee and government have listed this as a key industry for supported development, established institutions to promote industrial development, formulated and implemented development plans for cultivating the industrial ecosystem, and introduced practical and effective support policies and safeguard measures. Basic conditions within the region",
+          "category": "text",
+          "score": 1.0,
+          "source": "paddle_ocr"
+        }
+      ]
+    }
+  ]
+}

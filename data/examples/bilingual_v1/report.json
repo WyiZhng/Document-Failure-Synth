@@ -1,0 +1,160 @@
+{
+  "n_ok": 10,
+  "n_skip": 0,
+  "n_discard": 1,
+  "n_planned": 10,
+  "elapsed_sec": 893.86,
+  "records": [
+    {
+      "seq": 1,
+      "case": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/中间结果/dataset/task_001_002_raw",
+      "copy_index": 0,
+      "status": "ok",
+      "path": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_001_doc_21f4dc879ffd",
+      "doc_id": "doc_21f4dc879ffd",
+      "seed": 52,
+      "stats": {
+        "n_zh": 22,
+        "n_en": 21,
+        "en_cross_page": 0,
+        "n_errors": 0
+      }
+    },
+    {
+      "seq": 2,
+      "case": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/中间结果/dataset/task_001_002_raw",
+      "copy_index": 1,
+      "status": "ok",
+      "path": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_002_doc_21f4dc879ffd",
+      "doc_id": "doc_21f4dc879ffd",
+      "seed": 63,
+      "stats": {
+        "n_zh": 22,
+        "n_en": 21,
+        "en_cross_page": 0,
+        "n_errors": 0
+      }
+    },
+    {
+      "seq": 3,
+      "case": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/中间结果/dataset/task_001_002_raw",
+      "copy_index": 2,
+      "status": "ok",
+      "path": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_003_doc_21f4dc879ffd",
+      "doc_id": "doc_21f4dc879ffd",
+      "seed": 72,
+      "stats": {
+        "n_zh": 22,
+        "n_en": 21,
+        "en_cross_page": 0,
+        "n_errors": 0
+      }
+    },
+    {
+      "seq": 4,
+      "case": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/中间结果/dataset/task_001_002_raw",
+      "copy_index": 3,
+      "status": "ok",
+      "path": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_004_doc_21f4dc879ffd",
+      "doc_id": "doc_21f4dc879ffd",
+      "seed": 82,
+      "stats": {
+        "n_zh": 22,
+        "n_en": 21,
+        "en_cross_page": 0,
+        "n_errors": 0
+      }
+    },
+    {
+      "seq": 5,
+      "case": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/中间结果/dataset/task_001_002_raw",
+      "copy_index": 4,
+      "status": "ok",
+      "path": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_005_doc_21f4dc879ffd",
+      "doc_id": "doc_21f4dc879ffd",
+      "seed": 92,
+      "stats": {
+        "n_zh": 22,
+        "n_en": 21,
+        "en_cross_page": 0,
+        "n_errors": 0
+      }
+    },
+    {
+      "seq": 6,
+      "case": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/中间结果/dataset/task_001_002_raw",
+      "copy_index": 5,
+      "status": "ok",
+      "path": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_006_doc_21f4dc879ffd",
+      "doc_id": "doc_21f4dc879ffd",
+      "seed": 102,
+      "stats": {
+        "n_zh": 22,
+        "n_en": 21,
+        "en_cross_page": 0,
+        "n_errors": 0
+      }
+    },
+    {
+      "seq": 7,
+      "case": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/中间结果/dataset/task_001_002_raw",
+      "copy_index": 6,
+      "status": "ok",
+      "path": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_007_doc_21f4dc879ffd",
+      "doc_id": "doc_21f4dc879ffd",
+      "seed": 112,
+      "stats": {
+        "n_zh": 22,
+        "n_en": 21,
+        "en_cross_page": 0,
+        "n_errors": 0
+      }
+    },
+    {
+      "seq": 8,
+      "case": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/中间结果/dataset/task_001_002_raw",
+      "copy_index": 7,
+      "status": "ok",
+      "path": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_008_doc_21f4dc879ffd",
+      "doc_id": "doc_21f4dc879ffd",
+      "seed": 122,
+      "stats": {
+        "n_zh": 22,
+        "n_en": 21,
+        "en_cross_page": 0,
+        "n_errors": 0
+      }
+    },
+    {
+      "seq": 9,
+      "case": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/中间结果/dataset/task_001_002_raw",
+      "copy_index": 8,
+      "status": "ok",
+      "path": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_009_doc_21f4dc879ffd",
+      "doc_id": "doc_21f4dc879ffd",
+      "seed": 132,
+      "stats": {
+        "n_zh": 22,
+        "n_en": 21,
+        "en_cross_page": 0,
+        "n_errors": 0
+      }
+    },
+    {
+      "seq": 10,
+      "case": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/中间结果/dataset/task_001_002_raw",
+      "copy_index": 9,
+      "status": "ok",
+      "path": "/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_010_doc_21f4dc879ffd",
+      "doc_id": "doc_21f4dc879ffd",
+      "seed": 142,
+      "stats": {
+        "n_zh": 22,
+        "n_en": 21,
+        "en_cross_page": 0,
+        "n_errors": 0
+      }
+    }
+  ],
+  "note": "stats after pair-locked rerender; en_cross_page=0"
+}

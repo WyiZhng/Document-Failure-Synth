@@ -1,0 +1,778 @@
+{
+  "0": [
+    {
+      "id": "p0-b1",
+      "bbox": [
+        125,
+        103,
+        402,
+        123
+      ],
+      "category": "header",
+      "text": "SDPR - 2021 - 0040003"
+    },
+    {
+      "id": "p0-b2",
+      "bbox": [
+        136,
+        199,
+        866,
+        289
+      ],
+      "category": "doc_title",
+      "origin_id": "p0-b2",
+      "text": null
+    },
+    {
+      "id": "p0-b3",
+      "bbox": [
+        352,
+        344,
+        644,
+        369
+      ],
+      "category": "text",
+      "origin_id": "p0-b3",
+      "text": null
+    },
+    {
+      "id": "p0-b4",
+      "bbox": [
+        171,
+        437,
+        826,
+        546
+      ],
+      "category": "doc_title",
+      "origin_id": "p0-b4",
+      "text": null
+    },
+    {
+      "id": "p0-b6",
+      "bbox": [
+        128,
+        592,
+        873,
+        687
+      ],
+      "category": "text",
+      "origin_id": "p0-b6",
+      "text": null
+    },
+    {
+      "id": "p0-b9",
+      "bbox": [
+        186,
+        833,
+        377,
+        854
+      ],
+      "category": "text",
+      "origin_id": "p0-b9",
+      "text": null
+    },
+    {
+      "id": "p0-b8",
+      "bbox": [
+        548,
+        706,
+        814,
+        847
+      ],
+      "category": "seal",
+      "origin_id": "p0-b8",
+      "text": null
+    },
+    {
+      "id": "p0-b11",
+      "bbox": [
+        789,
+        881,
+        813,
+        895
+      ],
+      "category": "footer",
+      "text": ""
+    }
+  ],
+  "1": [
+    {
+      "id": "p1-b1",
+      "bbox": [
+        155,
+        139,
+        844,
+        169
+      ],
+      "category": "doc_title",
+      "origin_id": "p1-b1",
+      "text": null
+    },
+    {
+      "id": "p1-b2",
+      "bbox": [
+        401,
+        221,
+        596,
+        245
+      ],
+      "category": "paragraph_title",
+      "origin_id": "p1-b2",
+      "text": null
+    },
+    {
+      "id": "p1-b3",
+      "bbox": [
+        124,
+        272,
+        873,
+        583
+      ],
+      "category": "text",
+      "origin_id": "p1-b3",
+      "text": null
+    },
+    {
+      "id": "p1-b4",
+      "bbox": [
+        125,
+        594,
+        873,
+        796
+      ],
+      "category": "text",
+      "origin_id": "p1-b4",
+      "text": null
+    },
+    {
+      "id": "merge-p1-p2",
+      "bbox": [
+        125,
+        808,
+        872,
+        867
+      ],
+      "category": "text",
+      "origin_id": "p1-b5",
+      "text": null
+    },
+    {
+      "id": "p1-b6",
+      "bbox": [
+        185,
+        881,
+        211,
+        895
+      ],
+      "category": "footer",
+      "text": ""
+    }
+  ],
+  "2": [
+    {
+      "id": "merge-p1-p2",
+      "bbox": [
+        126,
+        103,
+        871,
+        163
+      ],
+      "category": "text",
+      "origin_id": "p2-b1",
+      "text": null
+    },
+    {
+      "id": "p2-b2",
+      "bbox": [
+        349,
+        190,
+        650,
+        213
+      ],
+      "category": "paragraph_title",
+      "origin_id": "p2-b2",
+      "text": null
+    },
+    {
+      "id": "p2-b3",
+      "bbox": [
+        126,
+        240,
+        871,
+        299
+      ],
+      "category": "text",
+      "origin_id": "p2-b3",
+      "text": null
+    },
+    {
+      "id": "p2-b4",
+      "bbox": [
+        123,
+        311,
+        872,
+        442
+      ],
+      "category": "text",
+      "origin_id": "p2-b4",
+      "text": null
+    },
+    {
+      "id": "p2-fake1",
+      "bbox": [
+        124,
+        453,
+        874,
+        659
+      ],
+      "category": "list_item",
+      "origin_id": "p2-fake1",
+      "is_virtual": true,
+      "text": null
+    },
+    {
+      "id": "p2-b5",
+      "bbox": [
+        124,
+        453,
+        874,
+        659
+      ],
+      "category": "text",
+      "origin_id": "p2-b5",
+      "text": null
+    },
+    {
+      "id": "p2-b8",
+      "bbox": [
+        127,
+        660,
+        871,
+        729
+      ],
+      "category": "text",
+      "origin_id": "p2-b8",
+      "text": null
+    },
+    {
+      "id": "merge-p2-p3",
+      "bbox": [
+        124,
+        737,
+        874,
+        868
+      ],
+      "category": "text",
+      "origin_id": "p2-b6",
+      "text": null
+    },
+    {
+      "id": "p2-b7",
+      "bbox": [
+        786,
+        881,
+        812,
+        895
+      ],
+      "category": "footer",
+      "text": ""
+    }
+  ],
+  "3": [
+    {
+      "id": "merge-p2-p3",
+      "bbox": [
+        125,
+        104,
+        874,
+        234
+      ],
+      "category": "text",
+      "origin_id": "p3-b1",
+      "text": null
+    },
+    {
+      "id": "p3-b2",
+      "bbox": [
+        126,
+        245,
+        874,
+        481
+      ],
+      "category": "text",
+      "origin_id": "p3-b2",
+      "text": null
+    },
+    {
+      "id": "p3-b3",
+      "bbox": [
+        125,
+        491,
+        873,
+        762
+      ],
+      "category": "text",
+      "origin_id": "p3-b3",
+      "text": null
+    },
+    {
+      "id": "merge-p3-p4",
+      "bbox": [
+        125,
+        773,
+        873,
+        868
+      ],
+      "category": "text",
+      "origin_id": "p3-b4",
+      "text": null
+    },
+    {
+      "id": "p3-b5",
+      "bbox": [
+        185,
+        881,
+        211,
+        895
+      ],
+      "category": "footer",
+      "text": ""
+    }
+  ],
+  "4": [
+    {
+      "id": "merge-p3-p4",
+      "bbox": [
+        123,
+        103,
+        873,
+        200
+      ],
+      "category": "text",
+      "origin_id": "p4-b1",
+      "text": null
+    },
+    {
+      "id": "p4-b2",
+      "bbox": [
+        124,
+        211,
+        875,
+        376
+      ],
+      "category": "text",
+      "origin_id": "p4-b2",
+      "text": null
+    },
+    {
+      "id": "p4-b3",
+      "bbox": [
+        387,
+        402,
+        610,
+        425
+      ],
+      "category": "paragraph_title",
+      "origin_id": "p4-b3",
+      "text": null
+    },
+    {
+      "id": "p4-b4",
+      "bbox": [
+        124,
+        453,
+        872,
+        512
+      ],
+      "category": "text",
+      "origin_id": "p4-b4",
+      "text": null
+    },
+    {
+      "id": "p4-b5",
+      "bbox": [
+        124,
+        524,
+        872,
+        583
+      ],
+      "category": "text",
+      "origin_id": "p4-b5",
+      "text": null
+    },
+    {
+      "id": "p4-b6",
+      "bbox": [
+        181,
+        595,
+        380,
+        618
+      ],
+      "category": "text",
+      "origin_id": "p4-b6",
+      "text": null
+    },
+    {
+      "id": "p4-b7",
+      "bbox": [
+        181,
+        630,
+        537,
+        654
+      ],
+      "category": "text",
+      "origin_id": "p4-b7",
+      "text": null
+    },
+    {
+      "id": "p4-b8",
+      "bbox": [
+        181,
+        666,
+        609,
+        689
+      ],
+      "category": "text",
+      "origin_id": "p4-b8",
+      "text": null
+    },
+    {
+      "id": "p4-b9",
+      "bbox": [
+        181,
+        701,
+        537,
+        724
+      ],
+      "category": "text",
+      "origin_id": "p4-b9",
+      "text": null
+    },
+    {
+      "id": "p4-b10",
+      "bbox": [
+        181,
+        737,
+        828,
+        760
+      ],
+      "category": "text",
+      "origin_id": "p4-b10",
+      "text": null
+    },
+    {
+      "id": "p4-b11",
+      "bbox": [
+        181,
+        772,
+        768,
+        796
+      ],
+      "category": "text",
+      "origin_id": "p4-b11",
+      "text": null
+    },
+    {
+      "id": "p4-b12",
+      "bbox": [
+        181,
+        808,
+        775,
+        831
+      ],
+      "category": "text",
+      "origin_id": "p4-b12",
+      "text": null
+    },
+    {
+      "id": "p4-b13",
+      "bbox": [
+        182,
+        843,
+        380,
+        867
+      ],
+      "category": "text",
+      "origin_id": "p4-b13",
+      "text": null
+    },
+    {
+      "id": "p4-b14",
+      "bbox": [
+        785,
+        881,
+        813,
+        896
+      ],
+      "category": "footer",
+      "text": ""
+    }
+  ],
+  "5": [
+    {
+      "id": "p5-b1",
+      "bbox": [
+        125,
+        104,
+        872,
+        163
+      ],
+      "category": "text",
+      "origin_id": "p5-b1",
+      "text": null
+    },
+    {
+      "id": "p5-b2",
+      "bbox": [
+        125,
+        175,
+        873,
+        234
+      ],
+      "category": "text",
+      "origin_id": "p5-b2",
+      "text": null
+    },
+    {
+      "id": "p5-b3",
+      "bbox": [
+        125,
+        246,
+        871,
+        340
+      ],
+      "category": "text",
+      "origin_id": "p5-b3",
+      "text": null
+    },
+    {
+      "id": "p5-b4",
+      "bbox": [
+        403,
+        367,
+        595,
+        389
+      ],
+      "category": "paragraph_title",
+      "origin_id": "p5-b4",
+      "text": null
+    },
+    {
+      "id": "p5-b5",
+      "bbox": [
+        124,
+        417,
+        872,
+        512
+      ],
+      "category": "text",
+      "origin_id": "p5-b5",
+      "text": null
+    },
+    {
+      "id": "p5-b6",
+      "bbox": [
+        125,
+        524,
+        872,
+        689
+      ],
+      "category": "text",
+      "origin_id": "p5-b6",
+      "text": null
+    },
+    {
+      "id": "p5-b7",
+      "bbox": [
+        125,
+        702,
+        872,
+        831
+      ],
+      "category": "text",
+      "origin_id": "p5-b7",
+      "text": null
+    },
+    {
+      "id": "merge-p5-p6",
+      "bbox": [
+        181,
+        843,
+        871,
+        866
+      ],
+      "category": "text",
+      "origin_id": "p5-b8",
+      "text": null
+    },
+    {
+      "id": "p5-b9",
+      "bbox": [
+        185,
+        881,
+        211,
+        896
+      ],
+      "category": "footer",
+      "text": ""
+    }
+  ],
+  "6": [
+    {
+      "id": "merge-p5-p6",
+      "bbox": [
+        124,
+        104,
+        872,
+        163
+      ],
+      "category": "text",
+      "origin_id": "p6-b1",
+      "text": null
+    },
+    {
+      "id": "p6-b2",
+      "bbox": [
+        126,
+        176,
+        872,
+        234
+      ],
+      "category": "text",
+      "origin_id": "p6-b2",
+      "text": null
+    },
+    {
+      "id": "p6-b3",
+      "bbox": [
+        181,
+        246,
+        775,
+        270
+      ],
+      "category": "text",
+      "origin_id": "p6-b3",
+      "text": null
+    },
+    {
+      "id": "p6-b4",
+      "bbox": [
+        181,
+        282,
+        669,
+        305
+      ],
+      "category": "text",
+      "origin_id": "p6-b4",
+      "text": null
+    },
+    {
+      "id": "p6-b5",
+      "bbox": [
+        126,
+        317,
+        872,
+        378
+      ],
+      "category": "text",
+      "origin_id": "p6-b5",
+      "text": null
+    },
+    {
+      "id": "p6-b6",
+      "bbox": [
+        126,
+        388,
+        871,
+        448
+      ],
+      "category": "text",
+      "origin_id": "p6-b6",
+      "text": null
+    },
+    {
+      "id": "p6-b7",
+      "bbox": [
+        401,
+        474,
+        597,
+        497
+      ],
+      "category": "paragraph_title",
+      "origin_id": "p6-b7",
+      "text": null
+    },
+    {
+      "id": "p6-b8",
+      "bbox": [
+        181,
+        526,
+        809,
+        549
+      ],
+      "category": "text",
+      "origin_id": "p6-b8",
+      "text": null
+    },
+    {
+      "id": "p6-b9",
+      "bbox": [
+        123,
+        561,
+        872,
+        619
+      ],
+      "category": "text",
+      "origin_id": "p6-b9",
+      "text": null
+    },
+    {
+      "id": "p6-b10",
+      "bbox": [
+        785,
+        880,
+        813,
+        896
+      ],
+      "category": "footer",
+      "text": ""
+    }
+  ],
+  "7": [
+    {
+      "id": "p7-b1",
+      "bbox": [
+        150,
+        826,
+        442,
+        846
+      ],
+      "category": "text",
+      "origin_id": "p7-b1",
+      "text": null
+    },
+    {
+      "id": "p7-b2",
+      "bbox": [
+        629,
+        826,
+        848,
+        846
+      ],
+      "category": "date",
+      "origin_id": "p7-b2",
+      "text": null
+    },
+    {
+      "id": "p7-b3",
+      "bbox": [
+        186,
+        880,
+        210,
+        896
+      ],
+      "category": "footer",
+      "text": ""
+    }
+  ]
+}

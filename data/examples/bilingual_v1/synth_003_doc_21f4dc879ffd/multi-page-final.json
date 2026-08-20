@@ -1,0 +1,795 @@
+{
+  "doc": [
+    {
+      "id": "p0-b1",
+      "page_index": [
+        0,
+        0
+      ],
+      "member": [
+        "p0-b1",
+        "p0-b15"
+      ],
+      "children": [
+        {
+          "id": "p0-b2",
+          "page_index": [
+            0,
+            0
+          ],
+          "member": [
+            "p0-b2",
+            "p0-b16"
+          ],
+          "children": [],
+          "category": [
+            "text",
+            "text"
+          ],
+          "bbox": [
+            [
+              40.0,
+              83.1875,
+              488.0,
+              108.78125
+            ],
+            [
+              512.0,
+              86.0625,
+              960.0,
+              105.09375
+            ]
+          ],
+          "text": [
+            "",
+            ""
+          ],
+          "is_virtual": false,
+          "link": false,
+          "link_to": []
+        },
+        {
+          "id": "p0-b3",
+          "page_index": [
+            0,
+            0
+          ],
+          "member": [
+            "p0-b3",
+            "p0-b17"
+          ],
+          "children": [
+            {
+              "id": "p0-b4",
+              "page_index": [
+                0,
+                0
+              ],
+              "member": [
+                "p0-b4",
+                "p0-b18"
+              ],
+              "children": [],
+              "category": [
+                "text",
+                "text"
+              ],
+              "bbox": [
+                [
+                  40.0,
+                  195.15625,
+                  488.0,
+                  246.34375
+                ],
+                [
+                  512.0,
+                  216.25,
+                  960.0,
+                  311.40625
+                ]
+              ],
+              "text": [
+                "",
+                ""
+              ],
+              "is_virtual": false,
+              "link": false,
+              "link_to": []
+            },
+            {
+              "id": "p0-b5",
+              "page_index": [
+                0,
+                0
+              ],
+              "member": [
+                "p0-b5",
+                "p0-b19"
+              ],
+              "children": [],
+              "category": [
+                "text",
+                "text"
+              ],
+              "bbox": [
+                [
+                  40.0,
+                  254.34375,
+                  488.0,
+                  279.9375
+                ],
+                [
+                  512.0,
+                  319.40625,
+                  960.0,
+                  338.4375
+                ]
+              ],
+              "text": [
+                "",
+                ""
+              ],
+              "is_virtual": false,
+              "link": false,
+              "link_to": []
+            },
+            {
+              "id": "p0-b6",
+              "page_index": [
+                0
+              ],
+              "member": [
+                "p0-b6"
+              ],
+              "children": [],
+              "category": [
+                "seal"
+              ],
+              "bbox": [
+                [
+                  40.0,
+                  287.9375,
+                  356.0,
+                  525.9375
+                ]
+              ],
+              "text": [
+                ""
+              ],
+              "is_virtual": false,
+              "link": false,
+              "link_to": []
+            }
+          ],
+          "category": [
+            "doc_title",
+            "doc_title"
+          ],
+          "bbox": [
+            [
+              40.0,
+              116.78125,
+              488.0,
+              187.15625
+            ],
+            [
+              512.0,
+              113.09375,
+              960.0,
+              208.25
+            ]
+          ],
+          "text": [
+            "",
+            ""
+          ],
+          "is_virtual": false,
+          "link": false,
+          "link_to": []
+        },
+        {
+          "id": "p0-b7",
+          "page_index": [
+            0,
+            0
+          ],
+          "member": [
+            "p0-b7",
+            "p0-b20"
+          ],
+          "children": [
+            {
+              "id": "p0-b8",
+              "page_index": [
+                0,
+                0
+              ],
+              "member": [
+                "p0-b8",
+                "p0-b21"
+              ],
+              "children": [
+                {
+                  "id": "p0-b9",
+                  "page_index": [
+                    0,
+                    0
+                  ],
+                  "member": [
+                    "p0-b9",
+                    "p0-b22"
+                  ],
+                  "children": [],
+                  "category": [
+                    "text",
+                    "text"
+                  ],
+                  "bbox": [
+                    [
+                      40.0,
+                      613.921875,
+                      488.0,
+                      844.265625
+                    ],
+                    [
+                      512.0,
+                      438.5625,
+                      960.0,
+                      838.21875
+                    ]
+                  ],
+                  "text": [
+                    "",
+                    ""
+                  ],
+                  "is_virtual": false,
+                  "link": false,
+                  "link_to": []
+                },
+                {
+                  "id": "p0-b10",
+                  "page_index": [
+                    0,
+                    0
+                  ],
+                  "member": [
+                    "p0-b10",
+                    "p0-b23"
+                  ],
+                  "children": [],
+                  "category": [
+                    "text",
+                    "text"
+                  ],
+                  "bbox": [
+                    [
+                      40.0,
+                      852.265625,
+                      488.0,
+                      1005.828125
+                    ],
+                    [
+                      512.0,
+                      846.21875,
+                      960.0,
+                      1112.65625
+                    ]
+                  ],
+                  "text": [
+                    "",
+                    ""
+                  ],
+                  "is_virtual": false,
+                  "link": false,
+                  "link_to": []
+                },
+                {
+                  "id": "p0-b11",
+                  "page_index": [
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "member": [
+                    "p0-b11",
+                    "p0-b24",
+                    "p0-b12",
+                    "p0-b25"
+                  ],
+                  "children": [],
+                  "category": [
+                    "text",
+                    "text",
+                    "text",
+                    "text"
+                  ],
+                  "bbox": [
+                    [
+                      40.0,
+                      1013.828125,
+                      488.0,
+                      1065.015625
+                    ],
+                    [
+                      512.0,
+                      1120.65625,
+                      960.0,
+                      1215.8125
+                    ],
+                    [
+                      40.0,
+                      1073.015625,
+                      488.0,
+                      1124.203125
+                    ],
+                    [
+                      512.0,
+                      1223.8125,
+                      960.0,
+                      1280.90625
+                    ]
+                  ],
+                  "text": [
+                    "",
+                    "",
+                    "",
+                    ""
+                  ],
+                  "is_virtual": false,
+                  "link": false,
+                  "link_to": []
+                }
+              ],
+              "category": [
+                "paragraph_title",
+                "paragraph_title"
+              ],
+              "bbox": [
+                [
+                  40.0,
+                  577.125,
+                  488.0,
+                  605.921875
+                ],
+                [
+                  512.0,
+                  411.53125,
+                  960.0,
+                  430.5625
+                ]
+              ],
+              "text": [
+                "",
+                ""
+              ],
+              "is_virtual": false,
+              "link": false,
+              "link_to": []
+            },
+            {
+              "id": "p0-b13",
+              "page_index": [
+                0,
+                0
+              ],
+              "member": [
+                "p0-b13",
+                "p0-b26"
+              ],
+              "children": [
+                {
+                  "id": "p0-b14",
+                  "page_index": [
+                    0,
+                    0
+                  ],
+                  "member": [
+                    "p0-b14",
+                    "p0-b27"
+                  ],
+                  "children": [
+                    {
+                      "id": "p1-b1",
+                      "page_index": [
+                        1,
+                        1
+                      ],
+                      "member": [
+                        "p1-b1",
+                        "p1-b7"
+                      ],
+                      "children": [],
+                      "category": [
+                        "text",
+                        "text"
+                      ],
+                      "bbox": [
+                        [
+                          40.0,
+                          40.0,
+                          488.0,
+                          142.375
+                        ],
+                        [
+                          512.0,
+                          40.0,
+                          960.0,
+                          192.25
+                        ]
+                      ],
+                      "text": [
+                        "",
+                        ""
+                      ],
+                      "is_virtual": false,
+                      "link": false,
+                      "link_to": []
+                    },
+                    {
+                      "id": "p1-fake1",
+                      "page_index": [
+                        1
+                      ],
+                      "member": [],
+                      "children": [
+                        {
+                          "id": "p1-b2",
+                          "page_index": [
+                            1,
+                            1
+                          ],
+                          "member": [
+                            "p1-b2",
+                            "p1-b8"
+                          ],
+                          "children": [],
+                          "category": [
+                            "text",
+                            "text"
+                          ],
+                          "bbox": [
+                            [
+                              40.0,
+                              150.375,
+                              488.0,
+                              303.9375
+                            ],
+                            [
+                              512.0,
+                              200.25,
+                              960.0,
+                              428.625
+                            ]
+                          ],
+                          "text": [
+                            "",
+                            ""
+                          ],
+                          "is_virtual": false,
+                          "link": false,
+                          "link_to": []
+                        },
+                        {
+                          "id": "p1-b3",
+                          "page_index": [
+                            1,
+                            1
+                          ],
+                          "member": [
+                            "p1-b3",
+                            "p1-b9"
+                          ],
+                          "children": [],
+                          "category": [
+                            "text",
+                            "text"
+                          ],
+                          "bbox": [
+                            [
+                              40.0,
+                              311.9375,
+                              488.0,
+                              363.125
+                            ],
+                            [
+                              512.0,
+                              436.625,
+                              960.0,
+                              512.75
+                            ]
+                          ],
+                          "text": [
+                            "",
+                            ""
+                          ],
+                          "is_virtual": false,
+                          "link": false,
+                          "link_to": []
+                        }
+                      ],
+                      "category": "list_item",
+                      "bbox": [],
+                      "text": "",
+                      "is_virtual": true,
+                      "link": false,
+                      "link_to": []
+                    },
+                    {
+                      "id": "p1-b4",
+                      "page_index": [
+                        1,
+                        1,
+                        1,
+                        1
+                      ],
+                      "member": [
+                        "p1-b4",
+                        "p1-b10",
+                        "p1-b5",
+                        "p1-b11"
+                      ],
+                      "children": [],
+                      "category": [
+                        "text",
+                        "text",
+                        "text",
+                        "text"
+                      ],
+                      "bbox": [
+                        [
+                          40.0,
+                          371.125,
+                          488.0,
+                          473.5
+                        ],
+                        [
+                          512.0,
+                          520.75,
+                          960.0,
+                          711.0625
+                        ],
+                        [
+                          40.0,
+                          481.5,
+                          488.0,
+                          583.875
+                        ],
+                        [
+                          512.0,
+                          719.0625,
+                          960.0,
+                          871.3125
+                        ]
+                      ],
+                      "text": [
+                        "",
+                        "",
+                        "",
+                        ""
+                      ],
+                      "is_virtual": false,
+                      "link": false,
+                      "link_to": []
+                    },
+                    {
+                      "id": "p1-b6",
+                      "page_index": [
+                        1,
+                        1
+                      ],
+                      "member": [
+                        "p1-b6",
+                        "p1-b12"
+                      ],
+                      "children": [],
+                      "category": [
+                        "text",
+                        "text"
+                      ],
+                      "bbox": [
+                        [
+                          40.0,
+                          591.875,
+                          488.0,
+                          771.03125
+                        ],
+                        [
+                          512.0,
+                          879.3125,
+                          960.0,
+                          1126.71875
+                        ]
+                      ],
+                      "text": [
+                        "",
+                        ""
+                      ],
+                      "is_virtual": false,
+                      "link": false,
+                      "link_to": []
+                    },
+                    {
+                      "id": "p2-b1",
+                      "page_index": [
+                        2,
+                        2
+                      ],
+                      "member": [
+                        "p2-b1",
+                        "p2-b3"
+                      ],
+                      "children": [],
+                      "category": [
+                        "text",
+                        "text"
+                      ],
+                      "bbox": [
+                        [
+                          40.0,
+                          40.0,
+                          488.0,
+                          219.15625
+                        ],
+                        [
+                          512.0,
+                          40.0,
+                          960.0,
+                          287.40625
+                        ]
+                      ],
+                      "text": [
+                        "",
+                        ""
+                      ],
+                      "is_virtual": false,
+                      "link": false,
+                      "link_to": []
+                    },
+                    {
+                      "id": "p2-b2",
+                      "page_index": [
+                        2,
+                        2
+                      ],
+                      "member": [
+                        "p2-b2",
+                        "p2-b4"
+                      ],
+                      "children": [],
+                      "category": [
+                        "text",
+                        "text"
+                      ],
+                      "bbox": [
+                        [
+                          40.0,
+                          227.15625,
+                          488.0,
+                          303.9375
+                        ],
+                        [
+                          512.0,
+                          295.40625,
+                          960.0,
+                          428.625
+                        ]
+                      ],
+                      "text": [
+                        "",
+                        ""
+                      ],
+                      "is_virtual": false,
+                      "link": false,
+                      "link_to": []
+                    }
+                  ],
+                  "category": [
+                    "text",
+                    "text"
+                  ],
+                  "bbox": [
+                    [
+                      40.0,
+                      1169.0,
+                      488.0,
+                      1220.1875
+                    ],
+                    [
+                      512.0,
+                      1315.9375,
+                      960.0,
+                      1373.03125
+                    ]
+                  ],
+                  "text": [
+                    "",
+                    ""
+                  ],
+                  "is_virtual": false,
+                  "link": false,
+                  "link_to": []
+                }
+              ],
+              "category": [
+                "paragraph_title",
+                "paragraph_title"
+              ],
+              "bbox": [
+                [
+                  40.0,
+                  1132.203125,
+                  488.0,
+                  1161.0
+                ],
+                [
+                  512.0,
+                  1288.90625,
+                  960.0,
+                  1307.9375
+                ]
+              ],
+              "text": [
+                "",
+                ""
+              ],
+              "is_virtual": false,
+              "link": false,
+              "link_to": []
+            }
+          ],
+          "category": [
+            "doc_title",
+            "doc_title"
+          ],
+          "bbox": [
+            [
+              40.0,
+              533.9375,
+              488.0,
+              569.125
+            ],
+            [
+              512.0,
+              346.4375,
+              960.0,
+              403.53125
+            ]
+          ],
+          "text": [
+            "",
+            ""
+          ],
+          "is_virtual": false,
+          "link": false,
+          "link_to": []
+        }
+      ],
+      "category": [
+        "doc_title",
+        "doc_title"
+      ],
+      "bbox": [
+        [
+          40.0,
+          40.0,
+          488.0,
+          75.1875
+        ],
+        [
+          512.0,
+          40.0,
+          960.0,
+          78.0625
+        ]
+      ],
+      "text": [
+        "",
+        ""
+      ],
+      "is_virtual": false,
+      "link": false,
+      "link_to": []
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+    "doc_id": "doc_21f4dc879ffd",
+    "task_id": "task_21604ed932e7",
+    "pdf_path": "/cpfs/shared/data/OcrData/finepdfs2/split01/subsplit0000/cmn_Hani_train_CC-MAIN-2021-49_4c374988/raw.pdf",
+    "images_path": "/cpfs/zhuyuemei/train/datasets/task_0714_0813/task_001_002_raw/images_path",
+    "reading_direction": "horizontal",
+    "document_type": "policy_document",
+    "split": "train"
+}

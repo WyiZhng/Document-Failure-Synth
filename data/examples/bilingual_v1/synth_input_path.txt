@@ -1,0 +1,10 @@
+/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_001_doc_21f4dc879ffd
+/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_002_doc_21f4dc879ffd
+/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_003_doc_21f4dc879ffd
+/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_004_doc_21f4dc879ffd
+/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_005_doc_21f4dc879ffd
+/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_006_doc_21f4dc879ffd
+/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_007_doc_21f4dc879ffd
+/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_008_doc_21f4dc879ffd
+/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_009_doc_21f4dc879ffd
+/home/wanyi/projects/Document_analyst_Trainer/复刻失效数据/合成数据/bilingual_v1/synth_010_doc_21f4dc879ffd
