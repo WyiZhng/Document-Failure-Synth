@@ -2,8 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 import yaml
+
+_ORIGIN = "origin.json"
+_FILLIN = "multi-page-final-fillin.json"
 
 
 @dataclass
@@ -75,3 +79,38 @@ def load_config(path: str | Path) -> SynthConfig:
             timeout=int(ocr_raw.get("timeout") or 300),
         ),
     )
+
+
+def _is_source_case(path: Path) -> bool:
+    return (
+        path.is_dir()
+        and (path / _ORIGIN).is_file()
+        and (path / _FILLIN).is_file()
+    )
+
+
+def expand_source_cases(patterns: Sequence[str], workspace: Path) -> list[Path]:
+    """Resolve yaml `source_cases` entries (paths or globs) to case directories."""
+    workspace = Path(workspace)
+    found: list[Path] = []
+    seen: set[Path] = set()
+    for raw in patterns:
+        pattern = str(raw).strip()
+        if not pattern:
+            continue
+        if any(ch in pattern for ch in "*?["):
+            matches = sorted(workspace.glob(pattern))
+        else:
+            path = Path(pattern)
+            matches = [path if path.is_absolute() else workspace / path]
+        for match in matches:
+            if not _is_source_case(match):
+                continue
+            resolved = match.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            found.append(match)
+    if not found:
+        raise ValueError(f"no source cases matched {list(patterns)} under {workspace}")
+    return found

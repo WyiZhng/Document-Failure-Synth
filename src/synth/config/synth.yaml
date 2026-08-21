@@ -1,13 +1,13 @@
 source_cases:
-  - data/source/task_001_002_raw
-copies_per_case: 10
-max_source_pages: 4          # 每份合成文档最多取源文档前 N 页素材
+  - data/source/*              # 匹配含 origin.json + fillin 的源目录
+copies_per_case: 1             # 每个源 case 只生成 1 份
+max_source_pages: 5            # 每份合成文档最多取源文档前 N 页素材
 seed: 42
-output_root: data/output/bilingual_v1
+output_root: data/output/bilingual_v2
 translate_categories: [text, paragraph_title, doc_title]
 page:
-  width: 1000                # CSS px,亦即截图像素宽
-  height: 1414               # A4 比例
+  width: 1000                  # CSS px,亦即截图像素宽
+  height: 1414                 # A4 比例
   margin: 40
   column_gap: 24
 llm:

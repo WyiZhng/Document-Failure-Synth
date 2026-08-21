@@ -9,8 +9,15 @@ from src.synth import runner
 
 
 def _cfg(tmp_path: Path, copies: int = 1, cases: list[str] | None = None) -> SynthConfig:
+    case_names = cases or ["case_a"]
+    if not any(any(ch in name for ch in "*?[") for name in case_names):
+        for name in case_names:
+            path = tmp_path / name
+            path.mkdir(parents=True, exist_ok=True)
+            (path / "origin.json").write_text("{}", encoding="utf-8")
+            (path / "multi-page-final-fillin.json").write_text("[]", encoding="utf-8")
     return SynthConfig(
-        source_cases=cases or ["case_a"],
+        source_cases=case_names,
         copies_per_case=copies,
         max_source_pages=4,
         seed=42,
@@ -127,3 +134,27 @@ def test_ensure_runtime_env_loads_local_dotenv(tmp_path, monkeypatch):
     runner.ensure_runtime_env(tmp_path)
     assert os.environ.get("OPENAI_API_KEY") == "sk-from-dotenv"
     assert os.environ.get("SYNTH_LLM_MODEL") == "local-model"
+
+
+def test_batch_one_copy_per_source_case(tmp_path: Path) -> None:
+    seen: list[tuple[str, int]] = []
+
+    def generate(case_dir, seq, seed, cfg, output_root):
+        del seed, cfg, output_root
+        seen.append((Path(case_dir).name, seq))
+        path = tmp_path / f"ok_{seq}"
+        path.mkdir()
+        return {"path": str(path.resolve()), "doc_id": Path(case_dir).name, "seed": 0, "stats": {}}
+
+    case_a = tmp_path / "data/source/case_a"
+    case_b = tmp_path / "data/source/case_b"
+    for path in (case_a, case_b):
+        path.mkdir(parents=True)
+        (path / "origin.json").write_text("{}", encoding="utf-8")
+        (path / "multi-page-final-fillin.json").write_text("[]", encoding="utf-8")
+
+    cfg = _cfg(tmp_path, copies=1, cases=["data/source/*"])
+    report = runner.run_batch(cfg, workspace=tmp_path, generate_fn=generate)
+    assert report["n_ok"] == 2
+    assert report["n_planned"] == 2
+    assert seen == [("case_a", 1), ("case_b", 2)]

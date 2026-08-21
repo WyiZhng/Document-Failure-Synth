@@ -11,7 +11,7 @@ import traceback
 from pathlib import Path
 from typing import Callable
 
-from src.synth.config import SynthConfig, load_config
+from src.synth.config import SynthConfig, expand_source_cases, load_config
 from src.synth.gt_builder import build_gt
 from src.synth.html_builder import build_source_html
 from src.synth.material import load_material
@@ -201,11 +201,14 @@ def run_batch(
     n_skip = 0
     n_discard = 0
     seq = 0
+    case_dirs = expand_source_cases(cfg.source_cases, workspace)
+    logger.info(
+        "batch cases=%s copies_per_case=%s",
+        [str(path) for path in case_dirs],
+        cfg.copies_per_case,
+    )
 
-    for case in cfg.source_cases:
-        case_dir = Path(case)
-        if not case_dir.is_absolute():
-            case_dir = workspace / case_dir
+    for case_dir in case_dirs:
         for copy_index in range(cfg.copies_per_case):
             seq += 1
             last_error = ""
@@ -253,7 +256,7 @@ def run_batch(
         "n_ok": n_ok,
         "n_skip": n_skip,
         "n_discard": n_discard,
-        "n_planned": len(cfg.source_cases) * cfg.copies_per_case,
+        "n_planned": len(case_dirs) * cfg.copies_per_case,
         "elapsed_sec": round(time.time() - started, 2),
         "records": records,
     }
