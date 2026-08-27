@@ -13,19 +13,23 @@ def _sort_key(block: PlacedBlock) -> tuple[float, float, int]:
     return (block.bbox[1], block.bbox[0], block.order)
 
 
-def _assign_ids(placed: list[PlacedBlock]) -> dict[tuple[str, str], PlacedBlock]:
-    by_page: dict[int, dict[str, list[PlacedBlock]]] = defaultdict(
-        lambda: {"zh": [], "en": []}
-    )
+def _assign_ids(
+    placed: list[PlacedBlock],
+    page_width: float,
+) -> dict[tuple[str, str], PlacedBlock]:
+    by_page: dict[int, list[PlacedBlock]] = defaultdict(list)
     for block in placed:
-        lang = block.lang if block.lang in {"zh", "en"} else "zh"
-        by_page[block.page][lang].append(block)
+        by_page[block.page].append(block)
 
+    mid = float(page_width) / 2.0
     mapped: dict[tuple[str, str], PlacedBlock] = {}
     for page in sorted(by_page):
-        ordered: list[PlacedBlock] = []
-        for lang in ("zh", "en"):
-            ordered.extend(sorted(by_page[page][lang], key=_sort_key))
+        left: list[PlacedBlock] = []
+        right: list[PlacedBlock] = []
+        for block in by_page[page]:
+            center_x = (block.bbox[0] + block.bbox[2]) / 2.0
+            (left if center_x < mid else right).append(block)
+        ordered = sorted(left, key=_sort_key) + sorted(right, key=_sort_key)
         for index, block in enumerate(ordered, start=1):
             block.__dict__["new_id"] = f"p{page}-b{index}"
             mapped[(block.node_id, block.lang)] = block
@@ -166,12 +170,11 @@ def build_gt(
     cfg: SynthConfig,
     seq: int,
 ) -> None:
-    del cfg
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     images_dir = (out_dir / "images_path").resolve()
 
-    mapped = _assign_ids(placed)
+    mapped = _assign_ids(placed, page_width=cfg.page.width)
     fake_counter = [0]
     doc: list[dict] = []
     for root in material.tree:

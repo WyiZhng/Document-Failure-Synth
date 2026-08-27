@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.synth.config import load_config
+from src.synth.config import expand_source_cases, load_config
 from src.synth.material import load_material
 from src.synth.runner import ensure_runtime_env, materialize_document
 
@@ -27,7 +27,7 @@ def main() -> int:
     ensure_runtime_env(ROOT)
     cfg = load_config(ROOT / "src/synth/config/synth.yaml")
     output_root = (ROOT / cfg.output_root).resolve()
-    case_dir = ROOT / cfg.source_cases[0]
+    case_dir = expand_source_cases(cfg.source_cases, ROOT)[0]
     dirs = sorted(
         path for path in output_root.glob("synth_*") if path.is_dir() and (path / "rewritten.html").is_file()
     )

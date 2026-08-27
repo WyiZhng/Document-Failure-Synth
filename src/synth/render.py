@@ -64,7 +64,12 @@ def _verify_bbox_against_dom(page, placed: PlacedBlock) -> None:
             )
 
 
-def render_pages(html: str, out_images_dir: Path, cfg: SynthConfig) -> list[PlacedBlock]:
+def render_pages(
+    html: str,
+    out_images_dir: Path,
+    cfg: SynthConfig,
+    column_layout: str | None = None,
+) -> list[PlacedBlock]:
     out_images_dir.mkdir(parents=True, exist_ok=True)
 
     # set_content 的页面 origin 是 about:blank,Chromium 会拒绝加载 file:// 图像;
@@ -72,11 +77,13 @@ def render_pages(html: str, out_images_dir: Path, cfg: SynthConfig) -> list[Plac
     html_file = out_images_dir / "_render_source.html"
     html_file.write_text(html, encoding="utf-8")
 
+    layout = column_layout or "zh-en"
     paginate_config = {
         "width": cfg.page.width,
         "height": cfg.page.height,
         "margin": cfg.page.margin,
         "columnGap": cfg.page.column_gap,
+        "columnLayout": layout,
     }
 
     with sync_playwright() as playwright:

@@ -1,10 +1,11 @@
 source_cases:
-  - data/source/*              # 匹配含 origin.json + fillin 的源目录
+  - task/source.txt                # 每行一个含 origin.json + fillin 的绝对路径
 copies_per_case: 1             # 每个源 case 只生成 1 份
 max_source_pages: 5            # 每份合成文档最多取源文档前 N 页素材
 seed: 42
-output_root: data/output/bilingual_v2
-translate_categories: [text, paragraph_title, doc_title]
+column_layouts: [zh-en, en-zh]  # 每份文档按 seed 任选一种:左中右英 / 左英右中
+output_root: data/output/0714_0827
+translate_categories: [text, paragraph_title, doc_title, table, table_title, form, form_title, footer, footnote, header, reference]
 page:
   width: 1000                  # CSS px,亦即截图像素宽
   height: 1414                 # A4 比例

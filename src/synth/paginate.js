@@ -6,6 +6,7 @@
  */
 function paginateDocument(config) {
   const { width, height, margin, columnGap } = config;
+  const layout = config.columnLayout === "en-zh" ? "en-zh" : "zh-en";
 
   const allNodes = Array.from(document.querySelectorAll("[data-node-id]"));
   const items = allNodes.map((el, order) => ({
@@ -26,6 +27,14 @@ function paginateDocument(config) {
   const colW = hasEn ? (contentW - columnGap) / 2 : contentW;
   const leftX = margin;
   const rightX = margin + colW + columnGap;
+  const zhX = hasEn && layout === "en-zh" ? rightX : leftX;
+  const enX = hasEn && layout === "en-zh" ? leftX : rightX;
+
+  function sideOf(lang) {
+    if (!hasEn) return "left";
+    if (layout === "en-zh") return lang === "en" ? "left" : "right";
+    return lang === "zh" ? "left" : "right";
+  }
 
   const measureRoot = document.createElement("div");
   measureRoot.style.cssText =
@@ -74,8 +83,7 @@ function paginateDocument(config) {
 
   const pages = [{ zh: [], en: [] }];
   let pageIdx = 0;
-  let leftY = margin;
-  let rightY = margin;
+  const cursor = { left: margin, right: margin };
 
   function fits(y, blockH) {
     return y + blockH <= margin + contentH;
@@ -84,24 +92,28 @@ function paginateDocument(config) {
   function newPage() {
     pageIdx += 1;
     pages[pageIdx] = { zh: [], en: [] };
-    leftY = margin;
-    rightY = margin;
+    cursor.left = margin;
+    cursor.right = margin;
   }
 
   for (const pair of pairs) {
     const zhH = pair.zh ? measureHeight(pair.zh.el) : 0;
     const enH = pair.en ? measureHeight(pair.en.el) : 0;
-    const zhNeedsPage = Boolean(pair.zh) && !fits(leftY, zhH) && leftY > margin;
-    const enNeedsPage = Boolean(pair.en) && !fits(rightY, enH) && rightY > margin;
+    const zhSide = pair.zh ? sideOf("zh") : null;
+    const enSide = pair.en ? sideOf("en") : null;
+    const zhNeedsPage =
+      Boolean(pair.zh) && !fits(cursor[zhSide], zhH) && cursor[zhSide] > margin;
+    const enNeedsPage =
+      Boolean(pair.en) && !fits(cursor[enSide], enH) && cursor[enSide] > margin;
     if (zhNeedsPage || enNeedsPage) newPage();
 
     if (pair.zh) {
-      pages[pageIdx].zh.push({ item: pair.zh, y: leftY, h: zhH });
-      leftY += zhH + BLOCK_GAP;
+      pages[pageIdx].zh.push({ item: pair.zh, y: cursor[zhSide], h: zhH });
+      cursor[zhSide] += zhH + BLOCK_GAP;
     }
     if (pair.en) {
-      pages[pageIdx].en.push({ item: pair.en, y: rightY, h: enH });
-      rightY += enH + BLOCK_GAP;
+      pages[pageIdx].en.push({ item: pair.en, y: cursor[enSide], h: enH });
+      cursor[enSide] += enH + BLOCK_GAP;
     }
   }
 
@@ -152,10 +164,10 @@ function paginateDocument(config) {
     root.appendChild(pageEl);
 
     for (const slot of pages[idx].zh) {
-      placeBlock(pageEl, slot.item.el, leftX, slot.y, idx, slot.item);
+      placeBlock(pageEl, slot.item.el, zhX, slot.y, idx, slot.item);
     }
     for (const slot of pages[idx].en) {
-      placeBlock(pageEl, slot.item.el, rightX, slot.y, idx, slot.item);
+      placeBlock(pageEl, slot.item.el, enX, slot.y, idx, slot.item);
     }
   }
 

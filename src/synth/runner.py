@@ -11,7 +11,7 @@ import traceback
 from pathlib import Path
 from typing import Callable
 
-from src.synth.config import SynthConfig, expand_source_cases, load_config
+from src.synth.config import SynthConfig, choose_column_layout, expand_source_cases, load_config
 from src.synth.gt_builder import build_gt
 from src.synth.html_builder import build_source_html
 from src.synth.material import load_material
@@ -99,12 +99,15 @@ def materialize_document(
     cfg: SynthConfig,
     output_root: Path,
     out_dir: Path,
+    column_layout: str | None = None,
 ) -> dict:
     rewritten = _relink_images(rewritten, material)
     images_dir = out_dir / "images_path"
     if images_dir.exists():
         shutil.rmtree(images_dir)
-    placed = render_pages(rewritten, images_dir, cfg)
+    layout = column_layout or choose_column_layout(cfg.column_layouts, seed)
+    logger.info("layout=%s seq=%s seed=%s", layout, seq, seed)
+    placed = render_pages(rewritten, images_dir, cfg, column_layout=layout)
     result = validate_doc(material.tree, placed, cfg)
     if not result.ok:
         raise RuntimeError("; ".join(result.errors[:8]))
@@ -144,11 +147,13 @@ def materialize_document(
 
     if Path(material.assets_dir).exists():
         shutil.rmtree(material.assets_dir, ignore_errors=True)
+    stats = dict(result.stats)
+    stats["column_layout"] = layout
     return {
         "path": str(out_dir.resolve()),
         "doc_id": material.doc_id,
         "seed": seed,
-        "stats": result.stats,
+        "stats": stats,
     }
 
 
@@ -171,7 +176,17 @@ def generate_one(
         rewritten = rewrite_html(html, cfg, seed=seed)
         (out_dir / "rewritten.html").write_text(rewritten, encoding="utf-8")
         logger.info("rewrite done seq=%s", seq)
-        return materialize_document(material, rewritten, seq, seed, cfg, output_root, out_dir)
+        layout = choose_column_layout(cfg.column_layouts, seed)
+        return materialize_document(
+            material,
+            rewritten,
+            seq,
+            seed,
+            cfg,
+            output_root,
+            out_dir,
+            column_layout=layout,
+        )
     except Exception:
         if out_dir.exists():
             shutil.rmtree(out_dir)
