@@ -81,7 +81,22 @@ def _find_text_pair(tree: list[dict]) -> dict:
 
 
 def test_bilingual_node_member_order(material_fixture, cfg, tmp_path):
-    build_gt(material_fixture, _same_page_placed(), tmp_path, cfg, seq=1)
+    build_gt(
+        material_fixture,
+        _same_page_placed(),
+        tmp_path,
+        cfg,
+        seq=1,
+        origin_metadata={
+            "source_doc_id": "source-doc",
+            "sample_seq": 1,
+            "column_layout": "zh-en",
+        },
+    )
+    origin = json.loads((tmp_path / "origin.json").read_text())
+    assert origin["source_doc_id"] == "source-doc"
+    assert origin["sample_seq"] == 1
+    assert origin["column_layout"] == "zh-en"
     tree = json.loads((tmp_path / "multi-page-final.json").read_text())["doc"]
     node = _find_text_pair(tree)
     assert len(node["member"]) == 2

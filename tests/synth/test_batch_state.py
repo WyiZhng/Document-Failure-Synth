@@ -8,6 +8,7 @@ import pytest
 from src.synth.batch_state import (
     append_progress,
     find_recoverable_output,
+    find_recoverable_outputs,
     load_latest_progress,
     load_or_create_manifest,
     output_is_complete,
@@ -110,6 +111,22 @@ def test_find_recoverable_output_requires_one_valid_candidate(tmp_path: Path):
     second = output_root / "synth_001_doc_b"
     _write_complete_output(second, seq=1)
     assert find_recoverable_output(output_root, seq=1) is None
+
+
+def test_find_recoverable_outputs_requires_a_complete_variant_set(tmp_path: Path):
+    output_root = tmp_path / "out"
+    first = output_root / "synth_001_doc_zh-en"
+    second = output_root / "synth_002_doc_en-zh"
+    _write_complete_output(first, seq=1)
+    _write_complete_output(second, seq=2)
+
+    assert find_recoverable_outputs(output_root, seq=1, variant_count=2) == [
+        first,
+        second,
+    ]
+
+    (second / "label.json").unlink()
+    assert find_recoverable_outputs(output_root, seq=1, variant_count=2) is None
 
 
 def test_atomic_writes_leave_target_readable_without_temp_files(tmp_path: Path):

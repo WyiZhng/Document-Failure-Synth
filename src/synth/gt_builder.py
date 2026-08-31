@@ -4,6 +4,7 @@ import json
 from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
+from typing import Any, Mapping
 
 from src.synth.config import SynthConfig
 from src.synth.material import Material, _as_list
@@ -268,6 +269,7 @@ def build_gt(
     out_dir: Path,
     cfg: SynthConfig,
     seq: int,
+    origin_metadata: Mapping[str, Any] | None = None,
 ) -> None:
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -296,6 +298,8 @@ def build_gt(
         "reading_direction": "horizontal",
         "document_type": material.document_type,
     }
+    if origin_metadata:
+        origin.update(dict(origin_metadata))
     (out_dir / "origin.json").write_text(
         json.dumps(origin, ensure_ascii=False, indent=2), encoding="utf-8"
     )

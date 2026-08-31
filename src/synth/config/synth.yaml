@@ -1,10 +1,10 @@
 source_cases:
   - task/source.txt                # 每行一个含 origin.json + fillin 的绝对路径
-copies_per_case: 1             # 每个源 case 只生成 1 份
-max_workers: 4                 # 同时生成的文档数
+copies_per_case: 1             # 每个源 case 生成 1 个语义改写版本
+max_workers: 4                 # 同时处理的语义改写 job 数
 max_source_pages: null         # null 表示使用源文档全部页面
 seed: 42
-column_layouts: [zh-en, en-zh]  # 每份文档按 seed 任选一种:左中右英 / 左英右中
+column_layouts: [zh-en, en-zh]  # 每个改写版本都生成两种布局:左中右英 / 左英右中
 output_root: data/output/0714_0827
 translate_categories: [text, paragraph_title, doc_title, table, table_title, form, form_title, footer, footnote, header, reference]
 page:

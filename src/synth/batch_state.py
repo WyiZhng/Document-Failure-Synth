@@ -6,7 +6,10 @@ import os
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-MANIFEST_VERSION = 1
+# The output contract now allows one semantic job to materialize multiple
+# layout variants.  Do not silently reuse a manifest created by the old
+# one-output-per-job runner.
+MANIFEST_VERSION = 2
 PHASE0_JSON_FILES = (
     "origin.json",
     "prelabel.json",
@@ -159,6 +162,37 @@ def find_recoverable_output(output_root: Path, seq: int) -> Path | None:
         if path.is_dir() and output_is_complete(path, seq)
     )
     return candidates[0] if len(candidates) == 1 else None
+
+
+def find_recoverable_outputs(
+    output_root: Path,
+    seq: int,
+    variant_count: int,
+) -> list[Path] | None:
+    """Find every complete layout variant belonging to one semantic job.
+
+    ``seq`` identifies the rewrite job while the output contract uses a
+    stable sample sequence for each materialized variant.  Returning ``None``
+    for a partial or ambiguous set makes the caller regenerate the whole job
+    atomically, which keeps paired layouts in sync.
+    """
+
+    output_root = Path(output_root)
+    if not output_root.is_dir() or variant_count <= 0:
+        return None
+
+    first_sample_seq = (seq - 1) * variant_count + 1
+    recovered: list[Path] = []
+    for sample_seq in range(first_sample_seq, first_sample_seq + variant_count):
+        candidates = sorted(
+            path
+            for path in output_root.glob(f"synth_{sample_seq:03d}_*")
+            if path.is_dir() and output_is_complete(path, sample_seq)
+        )
+        if len(candidates) != 1:
+            return None
+        recovered.append(candidates[0])
+    return recovered
 
 
 def _atomic_write(path: Path, content: str) -> None:

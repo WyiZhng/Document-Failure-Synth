@@ -258,6 +258,138 @@ def _write_complete_output(path: Path, seq: int) -> None:
         (path / name).write_text(json.dumps(payload), encoding="utf-8")
 
 
+def test_generate_one_rewrites_once_and_materializes_all_layouts(
+    tmp_path: Path,
+    monkeypatch,
+):
+    from types import SimpleNamespace
+
+    cfg = _cfg(tmp_path)
+    rewrite_calls: list[tuple[str, int]] = []
+    materialize_calls: list[dict] = []
+
+    def fake_load_material(case_dir, config, assets_dir):
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        return SimpleNamespace(doc_id="source_doc", assets_dir=assets_dir)
+
+    monkeypatch.setattr(
+        runner,
+        "load_material",
+        fake_load_material,
+    )
+    monkeypatch.setattr(
+        runner,
+        "build_source_html",
+        lambda loaded, config: "source html",
+    )
+
+    def fake_rewrite(html, config, seed=None):
+        rewrite_calls.append((html, seed))
+        return "rewritten html"
+
+    def fake_materialize(
+        loaded,
+        rewritten,
+        sample_seq,
+        seed,
+        config,
+        output_root,
+        out_dir,
+        column_layout=None,
+        **kwargs,
+    ):
+        materialize_calls.append(
+            {
+                "rewritten": rewritten,
+                "sample_seq": sample_seq,
+                "seed": seed,
+                "layout": column_layout,
+                "out_dir": out_dir,
+                "metadata": kwargs["origin_metadata"],
+            }
+        )
+        return {
+            "path": str(out_dir.resolve()),
+            "doc_id": loaded.doc_id,
+            "seed": seed,
+            "sample_seq": sample_seq,
+            "column_layout": column_layout,
+            "stats": {},
+        }
+
+    monkeypatch.setattr(runner, "rewrite_html", fake_rewrite)
+    monkeypatch.setattr(runner, "materialize_document", fake_materialize)
+
+    result = runner.generate_one(
+        tmp_path / "case",
+        2,
+        17,
+        cfg,
+        tmp_path / "generated",
+    )
+
+    assert rewrite_calls == [("source html", 17)]
+    assert [call["layout"] for call in materialize_calls] == ["zh-en", "en-zh"]
+    assert [call["sample_seq"] for call in materialize_calls] == [3, 4]
+    assert [call["rewritten"] for call in materialize_calls] == [
+        "rewritten html",
+        "rewritten html",
+    ]
+    assert [item["column_layout"] for item in result["variants"]] == [
+        "zh-en",
+        "en-zh",
+    ]
+    assert [item["sample_seq"] for item in result["variants"]] == [3, 4]
+    assert not (tmp_path / "generated" / "_assets_2_17").exists()
+
+
+def test_batch_lists_all_layout_variants(tmp_path: Path):
+    calls: list[int] = []
+
+    def generate(case_dir, seq, seed, cfg, output_root):
+        del case_dir
+        calls.append(seq)
+        variants = []
+        for index, layout in enumerate(cfg.column_layouts):
+            path = output_root / f"sample_{seq}_{layout}"
+            path.mkdir(parents=True)
+            variants.append(
+                {
+                    "path": str(path.resolve()),
+                    "doc_id": f"doc_{seq}",
+                    "seed": seed,
+                    "sample_seq": (seq - 1) * len(cfg.column_layouts) + index + 1,
+                    "column_layout": layout,
+                    "stats": {"column_layout": layout},
+                }
+            )
+        return {"variants": variants, "seed": seed, "rewrite_seq": seq}
+
+    report = runner.run_batch(
+        _cfg(tmp_path),
+        workspace=tmp_path,
+        generate_fn=generate,
+    )
+
+    assert calls == [1]
+    assert report["n_ok"] == 1
+    assert report["n_samples_ok"] == 2
+    assert report["n_samples_planned"] == 2
+    record = report["records"][0]
+    assert record["variant_count"] == 2
+    assert [item["column_layout"] for item in record["outputs"]] == [
+        "zh-en",
+        "en-zh",
+    ]
+    listed = (tmp_path / "out" / "synth_input_path.txt").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    assert listed == [
+        str(tmp_path / "out" / "sample_1_zh-en"),
+        str(tmp_path / "out" / "sample_1_en-zh"),
+    ]
+
+
 def test_resume_skips_complete_success_and_retries_previous_skip(tmp_path: Path):
     first_calls: list[int] = []
 
@@ -288,6 +420,38 @@ def test_resume_skips_complete_success_and_retries_previous_skip(tmp_path: Path)
     assert second["n_ok"] == 2
     assert second["n_skip"] == 0
     assert second_calls == [2]
+
+
+def test_resume_skips_only_when_all_layout_variants_are_complete(tmp_path: Path):
+    calls: list[int] = []
+
+    def generate(case_dir, seq, seed, cfg, output_root):
+        del case_dir
+        calls.append(seq)
+        variants = []
+        for index, layout in enumerate(cfg.column_layouts):
+            sample_seq = (seq - 1) * len(cfg.column_layouts) + index + 1
+            path = output_root / f"synth_{sample_seq:03d}_doc_{layout}"
+            _write_complete_output(path, sample_seq)
+            variants.append(
+                {
+                    "path": str(path),
+                    "doc_id": f"doc_{seq}",
+                    "seed": seed,
+                    "sample_seq": sample_seq,
+                    "column_layout": layout,
+                    "stats": {},
+                }
+            )
+        return {"variants": variants, "seed": seed}
+
+    cfg = _cfg(tmp_path)
+    first = runner.run_batch(cfg, workspace=tmp_path, generate_fn=generate)
+    second = runner.run_batch(cfg, workspace=tmp_path, generate_fn=generate)
+
+    assert first["n_samples_ok"] == 2
+    assert second["n_samples_ok"] == 2
+    assert calls == [1]
 
 
 def test_resume_requeues_corrupt_success_output(tmp_path: Path):
@@ -379,16 +543,31 @@ def test_two_real_generation_jobs_do_not_share_render_output(
     report = runner.run_batch(cfg, workspace=tmp_path)
 
     assert report["n_ok"] == 2
+    assert report["n_samples_ok"] == 4
     assert [record["seq"] for record in report["records"]] == [1, 2]
-    output_paths = [Path(record["path"]) for record in report["records"]]
-    assert len(set(output_paths)) == 2
-    for record, output in zip(report["records"], output_paths):
+    output_paths = [
+        Path(output["path"])
+        for record in report["records"]
+        for output in record["outputs"]
+    ]
+    assert len(set(output_paths)) == 4
+    assert len(output_paths) == 4
+    listed = (tmp_path / "out" / "synth_input_path.txt").read_text(
+        encoding="utf-8"
+    ).splitlines()
+    assert [str(path) for path in output_paths] == listed
+    for output_record, output in zip(
+        [output for record in report["records"] for output in record["outputs"]],
+        output_paths,
+    ):
         assert output.is_dir()
         assert (output / "origin.json").is_file()
         assert (output / "prelabel.json").is_file()
         assert (output / "label.json").is_file()
         assert (output / "multi-page-final.json").is_file()
         assert list((output / "images_path").glob("raw-page-*.png"))
-        assert json.loads((output / "origin.json").read_text(encoding="utf-8"))["task_id"] == (
-            f"synth_task_{record['seq']:03d}"
+        origin = json.loads((output / "origin.json").read_text(encoding="utf-8"))
+        assert origin["task_id"] == (
+            f"synth_task_{output_record['sample_seq']:03d}"
         )
+        assert origin["column_layout"] == output_record["column_layout"]

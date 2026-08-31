@@ -16,7 +16,7 @@ from typing import Any, Callable
 
 from src.synth.batch_state import (
     append_progress,
-    find_recoverable_output,
+    find_recoverable_outputs,
     load_latest_progress,
     load_or_create_manifest,
     output_is_complete,
@@ -53,8 +53,64 @@ class JobResult:
     status: str
     attempts: int
     discard_count: int
-    produced: dict[str, Any] | None = None
+    produced: Any = None
     error: str = ""
+
+
+def _produced_outputs(produced: Any) -> tuple[list[dict[str, Any]], bool]:
+    """Normalize one-output and multi-variant generator results.
+
+    The single-output form remains supported for injected generators and for
+    callers that use ``run_batch`` as a library.  The built-in generator uses
+    ``{"variants": [...]}`` so one rewrite can be rendered into several
+    physical samples.
+    """
+
+    if isinstance(produced, dict) and "variants" in produced:
+        raw_variants = produced.get("variants")
+        if not isinstance(raw_variants, list):
+            raise ValueError("generated variants must be a list")
+        variants = [item for item in raw_variants if isinstance(item, dict)]
+        if len(variants) != len(raw_variants):
+            raise ValueError("each generated variant must be an object")
+        if not variants:
+            raise ValueError("generated variants cannot be empty")
+        if any(not str(item.get("path", "")).strip() for item in variants):
+            raise ValueError("each generated variant is missing path")
+        return variants, True
+
+    if isinstance(produced, list):
+        variants = [item for item in produced if isinstance(item, dict)]
+        if len(variants) != len(produced):
+            raise ValueError("each generated variant must be an object")
+        if not variants:
+            raise ValueError("generated variants cannot be empty")
+        if any(not str(item.get("path", "")).strip() for item in variants):
+            raise ValueError("each generated variant is missing path")
+        return variants, True
+
+    if not isinstance(produced, dict):
+        raise ValueError("generator must return an output object or variants list")
+    if not str(produced.get("path", "")).strip():
+        raise ValueError("generated output is missing path")
+    return [produced], False
+
+
+def _record_outputs(record: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_outputs = record.get("outputs")
+    if isinstance(raw_outputs, list):
+        return [item for item in raw_outputs if isinstance(item, dict)]
+    if record.get("path"):
+        return [
+            {
+                "path": record.get("path"),
+                "doc_id": record.get("doc_id"),
+                "seed": record.get("seed"),
+                "stats": record.get("stats") or {},
+                "sample_seq": record.get("seq"),
+            }
+        ]
+    return []
 
 
 def _build_jobs(
@@ -83,7 +139,7 @@ def _run_job_with_retries(
     job: JobSpec,
     cfg: SynthConfig,
     output_root: Path,
-    generate: Callable[[Path, int, int, SynthConfig, Path], dict],
+    generate: Callable[[Path, int, int, SynthConfig, Path], Any],
 ) -> JobResult:
     last_error = ""
     for attempt in range(MAX_ATTEMPTS):
@@ -96,6 +152,7 @@ def _run_job_with_retries(
                 cfg,
                 output_root,
             )
+            _produced_outputs(produced)
             return JobResult(
                 job=job,
                 status="ok",
@@ -130,22 +187,42 @@ def _record_from_result(result: JobResult) -> dict:
             "status": "skipped",
             "attempts": result.attempts,
             "discard_count": result.discard_count,
+            "variant_count": 0,
+            "outputs": [],
             "error": result.error[:500],
         }
 
-    produced = result.produced or {}
-    return {
+    produced = result.produced
+    outputs, is_variant_payload = _produced_outputs(produced)
+    record = {
         "seq": job.seq,
         "case": str(job.case_dir),
         "copy_index": job.copy_index,
         "status": "ok",
         "attempts": result.attempts,
         "discard_count": result.discard_count,
-        "path": produced.get("path"),
-        "doc_id": produced.get("doc_id"),
-        "seed": produced.get("seed"),
-        "stats": produced.get("stats") or {},
+        "variant_count": len(outputs),
+        "outputs": outputs,
     }
+    if is_variant_payload:
+        if isinstance(produced, dict):
+            record["seed"] = produced.get("seed")
+            record["rewrite_seq"] = produced.get("rewrite_seq", job.seq)
+        else:
+            record["rewrite_seq"] = job.seq
+    else:
+        output = outputs[0]
+        # Keep the original top-level fields for callers that consume a
+        # single-output report, while ``outputs`` is the canonical form.
+        record.update(
+            {
+                "path": output.get("path"),
+                "doc_id": output.get("doc_id"),
+                "seed": output.get("seed"),
+                "stats": output.get("stats") or {},
+            }
+        )
+    return record
 
 
 _REPORT_FIELDS = (
@@ -159,6 +236,9 @@ _REPORT_FIELDS = (
     "doc_id",
     "seed",
     "stats",
+    "variant_count",
+    "outputs",
+    "rewrite_seq",
     "error",
 )
 
@@ -261,14 +341,45 @@ def _terminal_event(
     return event
 
 
+def _origin_value(origin: dict[str, Any], key: str, fallback: Any = None) -> Any:
+    value = origin.get(key)
+    return fallback if value is None else value
+
+
 def _recovered_event(
     job: JobSpec,
-    output_path: Path,
+    output_paths: Path | list[Path],
     previous: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    origin = json.loads((output_path / "origin.json").read_text(encoding="utf-8"))
     previous = previous or {}
-    return {
+    paths = [output_paths] if isinstance(output_paths, Path) else list(output_paths)
+    previous_outputs = {
+        str(item.get("path")): item
+        for item in _record_outputs(previous)
+        if item.get("path")
+    }
+    outputs: list[dict[str, Any]] = []
+    for output_path in paths:
+        origin = json.loads((output_path / "origin.json").read_text(encoding="utf-8"))
+        previous_output = previous_outputs.get(str(output_path.resolve()), {})
+        output = {
+            "path": str(output_path.resolve()),
+            "doc_id": origin.get("doc_id"),
+            "seed": _origin_value(
+                origin,
+                "seed",
+                previous_output.get("seed", previous.get("seed")),
+            ),
+            "stats": previous_output.get(
+                "stats", previous.get("stats") or {}
+            ),
+        }
+        for key in ("sample_seq", "column_layout", "rewrite_seq"):
+            if key in origin:
+                output[key] = origin[key]
+        outputs.append(output)
+
+    event = {
         "job_id": job.job_id,
         "seq": job.seq,
         "case": str(job.case_dir),
@@ -276,13 +387,48 @@ def _recovered_event(
         "status": "ok",
         "attempts": int(previous.get("attempts", 0)),
         "discard_count": int(previous.get("discard_count", 0)),
-        "path": str(output_path.resolve()),
-        "doc_id": origin.get("doc_id"),
-        "seed": previous.get("seed"),
-        "stats": previous.get("stats") or {},
+        "variant_count": len(outputs),
+        "outputs": outputs,
         "recovered": True,
         "updated_at": time.time(),
     }
+    if len(outputs) == 1:
+        event.update(
+            {
+                "path": outputs[0].get("path"),
+                "doc_id": outputs[0].get("doc_id"),
+                "seed": outputs[0].get("seed"),
+                "stats": outputs[0].get("stats") or {},
+            }
+        )
+    return event
+
+
+def _event_outputs_complete(event: dict[str, Any], job: JobSpec) -> bool:
+    """Check every physical output recorded for a successful job."""
+
+    outputs = _record_outputs(event)
+    if not outputs:
+        return False
+    recorded_count = event.get("variant_count")
+    if recorded_count is not None:
+        try:
+            if int(recorded_count) != len(outputs):
+                return False
+        except (TypeError, ValueError):
+            return False
+
+    for output in outputs:
+        raw_path = output.get("path")
+        if not raw_path:
+            return False
+        try:
+            sample_seq = int(output.get("sample_seq", job.seq))
+        except (TypeError, ValueError):
+            return False
+        if not output_is_complete(Path(raw_path), sample_seq):
+            return False
+    return True
 
 
 def _terminal_records(
@@ -303,19 +449,33 @@ def _write_batch_checkpoint(
     jobs: list[JobSpec],
     latest: dict[str, dict[str, Any]],
     started: float,
+    variants_per_job: int = 1,
 ) -> dict:
     records = _terminal_records(jobs, latest)
     records.sort(key=lambda record: int(record["seq"]))
-    successes = [
-        str(record["path"])
+    successes: list[str] = []
+    for record in records:
+        if record.get("status") != "ok":
+            continue
+        successes.extend(
+            str(output["path"])
+            for output in _record_outputs(record)
+            if output.get("path")
+        )
+    n_ok = sum(record.get("status") == "ok" for record in records)
+    n_samples_ok = sum(
+        len(_record_outputs(record))
         for record in records
-        if record.get("status") == "ok" and record.get("path")
-    ]
+        if record.get("status") == "ok"
+    )
     report = {
-        "n_ok": sum(record.get("status") == "ok" for record in records),
+        # n_ok/n_skip remain semantic-job counters for compatibility.
+        "n_ok": n_ok,
         "n_skip": sum(record.get("status") == "skipped" for record in records),
         "n_discard": sum(int(record.get("discard_count", 0)) for record in records),
         "n_planned": len(jobs),
+        "n_samples_ok": n_samples_ok,
+        "n_samples_planned": len(jobs) * variants_per_job,
         "elapsed_sec": round(time.time() - started, 2),
         "records": records,
     }
@@ -401,6 +561,9 @@ def materialize_document(
     output_root: Path,
     out_dir: Path,
     column_layout: str | None = None,
+    *,
+    cleanup_assets: bool = True,
+    origin_metadata: dict[str, Any] | None = None,
 ) -> dict:
     rewritten = _relink_images(rewritten, material)
     images_dir = out_dir / "images_path"
@@ -413,7 +576,14 @@ def materialize_document(
     if not result.ok:
         raise RuntimeError("; ".join(result.errors[:8]))
 
-    build_gt(material, placed, out_dir, cfg, seq=seq)
+    build_gt(
+        material,
+        placed,
+        out_dir,
+        cfg,
+        seq=seq,
+        origin_metadata=origin_metadata,
+    )
     doc = json.loads((out_dir / "multi-page-final.json").read_text(encoding="utf-8"))["doc"]
     projection_errors = validate_page_projection(doc)
     if projection_errors:
@@ -446,7 +616,7 @@ def materialize_document(
     if used is not None:
         (out_dir / "ocr_url.txt").write_text(used.url, encoding="utf-8")
 
-    if Path(material.assets_dir).exists():
+    if cleanup_assets and Path(material.assets_dir).exists():
         shutil.rmtree(material.assets_dir, ignore_errors=True)
     stats = dict(result.stats)
     stats["column_layout"] = layout
@@ -454,6 +624,8 @@ def materialize_document(
         "path": str(out_dir.resolve()),
         "doc_id": material.doc_id,
         "seed": seed,
+        "sample_seq": seq,
+        "column_layout": layout,
         "stats": stats,
     }
 
@@ -464,44 +636,63 @@ def generate_one(
     seed: int,
     cfg: SynthConfig,
     output_root: Path,
-) -> dict:
-    material = load_material(case_dir, cfg, output_root / f"_assets_{seq}_{seed}")
-    out_dir = output_root / f"synth_{seq:03d}_{material.doc_id}"
-    if out_dir.exists():
-        shutil.rmtree(out_dir)
-    out_dir.mkdir(parents=True)
-    logger.info("generate seq=%s seed=%s doc_id=%s", seq, seed, material.doc_id)
-
+) -> dict[str, Any]:
+    assets = output_root / f"_assets_{seq}_{seed}"
+    output_dirs: list[Path] = []
     try:
+        material = load_material(case_dir, cfg, assets)
+        logger.info("generate seq=%s seed=%s doc_id=%s", seq, seed, material.doc_id)
         html = build_source_html(material, cfg)
         rewritten = rewrite_html(html, cfg, seed=seed)
-        (out_dir / "rewritten.html").write_text(rewritten, encoding="utf-8")
         logger.info("rewrite done seq=%s", seq)
-        layout = choose_column_layout(cfg.column_layouts, seed)
-        return materialize_document(
-            material,
-            rewritten,
-            seq,
-            seed,
-            cfg,
-            output_root,
-            out_dir,
-            column_layout=layout,
-        )
+        variants: list[dict[str, Any]] = []
+        variant_count = len(cfg.column_layouts)
+        for variant_index, layout in enumerate(cfg.column_layouts):
+            sample_seq = (seq - 1) * variant_count + variant_index + 1
+            out_dir = output_root / (
+                f"synth_{sample_seq:03d}_{material.doc_id}_{layout}"
+            )
+            if out_dir.exists():
+                shutil.rmtree(out_dir)
+            out_dir.mkdir(parents=True)
+            output_dirs.append(out_dir)
+            (out_dir / "rewritten.html").write_text(rewritten, encoding="utf-8")
+            variant = materialize_document(
+                material,
+                rewritten,
+                sample_seq,
+                seed,
+                cfg,
+                output_root,
+                out_dir,
+                column_layout=layout,
+                cleanup_assets=False,
+                origin_metadata={
+                    "source_doc_id": material.doc_id,
+                    "rewrite_seq": seq,
+                    "sample_seq": sample_seq,
+                    "column_layout": layout,
+                    "seed": seed,
+                },
+            )
+            variant["rewrite_seq"] = seq
+            variants.append(variant)
+        return {"variants": variants, "seed": seed, "rewrite_seq": seq}
     except Exception:
-        if out_dir.exists():
-            shutil.rmtree(out_dir)
-        assets = output_root / f"_assets_{seq}_{seed}"
+        for out_dir in output_dirs:
+            if out_dir.exists():
+                shutil.rmtree(out_dir)
+        raise
+    finally:
         if assets.exists():
             shutil.rmtree(assets, ignore_errors=True)
-        raise
 
 
 def run_batch(
     cfg: SynthConfig,
     *,
     workspace: Path,
-    generate_fn: Callable[..., dict] | None = None,
+    generate_fn: Callable[..., Any] | None = None,
 ) -> dict:
     generate = generate_fn or generate_one
     workspace = Path(workspace)
@@ -514,9 +705,10 @@ def run_batch(
     case_dirs = expand_source_cases(cfg.source_cases, workspace)
     jobs = _build_jobs(case_dirs, cfg.copies_per_case, cfg.seed)
     logger.info(
-        "batch cases=%s copies_per_case=%s",
+        "batch cases=%s copies_per_case=%s layouts=%s",
         [str(path) for path in case_dirs],
         cfg.copies_per_case,
+        cfg.column_layouts,
     )
 
     manifest_path = output_root / "batch_manifest.json"
@@ -531,18 +723,20 @@ def run_batch(
     pending: list[JobSpec] = []
     for job in jobs:
         previous = latest.get(job.job_id)
-        previous_path = previous.get("path") if previous else None
         if (
             previous
             and previous.get("status") == "ok"
-            and previous_path
-            and output_is_complete(Path(previous_path), job.seq)
+            and _event_outputs_complete(previous, job)
         ):
             continue
 
         if not manifest_created:
-            recovered = find_recoverable_output(output_root, job.seq)
-            if recovered is not None:
+            recovered = find_recoverable_outputs(
+                output_root,
+                job.seq,
+                len(cfg.column_layouts),
+            )
+            if recovered:
                 event = _recovered_event(job, recovered, previous)
                 append_progress(progress_path, event)
                 latest[job.job_id] = event
@@ -550,8 +744,20 @@ def run_batch(
         pending.append(job)
 
     if not pending:
-        return _write_batch_checkpoint(output_root, jobs, latest, started)
-    _write_batch_checkpoint(output_root, jobs, latest, started)
+        return _write_batch_checkpoint(
+            output_root,
+            jobs,
+            latest,
+            started,
+            variants_per_job=len(cfg.column_layouts),
+        )
+    _write_batch_checkpoint(
+        output_root,
+        jobs,
+        latest,
+        started,
+        variants_per_job=len(cfg.column_layouts),
+    )
 
     executor = ThreadPoolExecutor(
         max_workers=cfg.max_workers,
@@ -591,14 +797,26 @@ def run_batch(
             event = _terminal_event(job, record, previous)
             append_progress(progress_path, event)
             latest[job.job_id] = event
-            _write_batch_checkpoint(output_root, jobs, latest, started)
+            _write_batch_checkpoint(
+                output_root,
+                jobs,
+                latest,
+                started,
+                variants_per_job=len(cfg.column_layouts),
+            )
     except KeyboardInterrupt:
         executor.shutdown(wait=False, cancel_futures=True)
         raise
     else:
         executor.shutdown(wait=True)
 
-    return _write_batch_checkpoint(output_root, jobs, latest, started)
+    return _write_batch_checkpoint(
+        output_root,
+        jobs,
+        latest,
+        started,
+        variants_per_job=len(cfg.column_layouts),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -619,9 +837,10 @@ def main(argv: list[str] | None = None) -> int:
     report = run_batch(cfg, workspace=workspace)
     print(
         f"ok={report['n_ok']} skip={report['n_skip']} discard={report['n_discard']} "
+        f"samples_ok={report['n_samples_ok']}/{report['n_samples_planned']} "
         f"elapsed={report['elapsed_sec']}s"
     )
-    return 0 if report["n_ok"] else 1
+    return 0 if report["n_samples_ok"] else 1
 
 
 if __name__ == "__main__":

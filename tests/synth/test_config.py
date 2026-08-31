@@ -14,6 +14,7 @@ def test_load_default_config():
     assert cfg.output_root == "data/output/0714_0827"
     assert cfg.max_source_pages is None
     assert cfg.ocr.timeout == 300
+    assert cfg.column_layouts == ["zh-en", "en-zh"]
 
 
 def test_load_config_rejects_non_positive_max_workers(tmp_path: Path) -> None:
