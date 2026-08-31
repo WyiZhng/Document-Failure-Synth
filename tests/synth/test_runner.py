@@ -4,11 +4,18 @@ import json
 import os
 from pathlib import Path
 
+import pytest
+
 from src.synth.config import LlmConfig, OcrConfig, PageConfig, SynthConfig
 from src.synth import runner
 
 
-def _cfg(tmp_path: Path, copies: int = 1, cases: list[str] | None = None) -> SynthConfig:
+def _cfg(
+    tmp_path: Path,
+    copies: int = 1,
+    cases: list[str] | None = None,
+    max_workers: int = 1,
+) -> SynthConfig:
     case_names = cases or ["case_a"]
     if not any(any(ch in name for ch in "*?[") for name in case_names):
         for name in case_names:
@@ -32,6 +39,7 @@ def _cfg(tmp_path: Path, copies: int = 1, cases: list[str] | None = None) -> Syn
             max_retries=1,
         ),
         ocr=OcrConfig(url="", timeout=300),
+        max_workers=max_workers,
     )
 
 
@@ -158,3 +166,229 @@ def test_batch_one_copy_per_source_case(tmp_path: Path) -> None:
     assert report["n_ok"] == 2
     assert report["n_planned"] == 2
     assert seen == [("case_a", 1), ("case_b", 2)]
+
+
+def test_parallel_batch_keeps_seq_order(tmp_path: Path):
+    import threading
+    import time
+
+    cfg = _cfg(tmp_path, copies=3, max_workers=3)
+    barrier = threading.Barrier(3)
+    lock = threading.Lock()
+    active = 0
+    max_active = 0
+
+    def generate(case_dir, seq, seed, cfg, output_root):
+        nonlocal active, max_active
+        del case_dir, cfg, output_root
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+        try:
+            barrier.wait(timeout=2)
+            time.sleep((4 - seq) * 0.02)
+            path = tmp_path / f"ok_{seq}"
+            path.mkdir(exist_ok=True)
+            return {
+                "path": str(path),
+                "doc_id": f"doc_{seq}",
+                "seed": seed,
+                "stats": {},
+            }
+        finally:
+            with lock:
+                active -= 1
+
+    report = runner.run_batch(cfg, workspace=tmp_path, generate_fn=generate)
+    assert max_active >= 2
+    assert report["n_ok"] == 3
+    assert [record["seq"] for record in report["records"]] == [1, 2, 3]
+
+
+def test_parallel_failure_does_not_cancel_other_jobs(tmp_path: Path):
+    cfg = _cfg(tmp_path, copies=3, max_workers=3)
+    calls: dict[int, list[int]] = {}
+
+    def generate(case_dir, seq, seed, cfg, output_root):
+        del case_dir, cfg, output_root
+        calls.setdefault(seq, []).append(seed)
+        if seq == 1:
+            raise RuntimeError("job 1 failed")
+        path = tmp_path / f"ok_{seq}"
+        path.mkdir(exist_ok=True)
+        return {
+            "path": str(path),
+            "doc_id": f"doc_{seq}",
+            "seed": seed,
+            "stats": {},
+        }
+
+    report = runner.run_batch(cfg, workspace=tmp_path, generate_fn=generate)
+    assert report["n_skip"] == 1
+    assert report["n_ok"] == 2
+    assert report["n_discard"] == 3
+    assert len(calls[1]) == 3
+    assert len(set(calls[1])) == 3
+    assert {
+        record["seq"]
+        for record in report["records"]
+        if record["status"] == "ok"
+    } == {2, 3}
+
+
+def _write_complete_output(path: Path, seq: int) -> None:
+    images = path / "images_path"
+    images.mkdir(parents=True, exist_ok=True)
+    (images / "raw-page-1.png").write_bytes(b"png")
+    (path / "origin.json").write_text(
+        json.dumps(
+            {
+                "doc_id": f"doc_{seq}",
+                "task_id": f"synth_task_{seq:03d}",
+                "images_path": str(images.resolve()),
+            }
+        ),
+        encoding="utf-8",
+    )
+    for name, payload in {
+        "prelabel.json": {"pages": []},
+        "label.json": {"pages": []},
+        "multi-page-final.json": {"doc": []},
+    }.items():
+        (path / name).write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_resume_skips_complete_success_and_retries_previous_skip(tmp_path: Path):
+    first_calls: list[int] = []
+
+    def first_generate(case_dir, seq, seed, cfg, output_root):
+        del case_dir, seed, cfg
+        first_calls.append(seq)
+        if seq == 2:
+            raise RuntimeError("temporary failure")
+        path = output_root / f"synth_{seq:03d}_doc_{seq}"
+        _write_complete_output(path, seq)
+        return {"path": str(path), "doc_id": f"doc_{seq}", "seed": 0, "stats": {}}
+
+    cfg = _cfg(tmp_path, copies=2)
+    first = runner.run_batch(cfg, workspace=tmp_path, generate_fn=first_generate)
+    assert first["n_ok"] == 1
+    assert first["n_skip"] == 1
+
+    second_calls: list[int] = []
+
+    def second_generate(case_dir, seq, seed, cfg, output_root):
+        del case_dir, seed, cfg
+        second_calls.append(seq)
+        path = output_root / f"synth_{seq:03d}_doc_{seq}"
+        _write_complete_output(path, seq)
+        return {"path": str(path), "doc_id": f"doc_{seq}", "seed": 0, "stats": {}}
+
+    second = runner.run_batch(cfg, workspace=tmp_path, generate_fn=second_generate)
+    assert second["n_ok"] == 2
+    assert second["n_skip"] == 0
+    assert second_calls == [2]
+
+
+def test_resume_requeues_corrupt_success_output(tmp_path: Path):
+    calls: list[int] = []
+
+    def generate(case_dir, seq, seed, cfg, output_root):
+        del case_dir, seed, cfg
+        calls.append(seq)
+        path = output_root / f"synth_{seq:03d}_doc_{seq}"
+        _write_complete_output(path, seq)
+        return {"path": str(path), "doc_id": f"doc_{seq}", "seed": 0, "stats": {}}
+
+    cfg = _cfg(tmp_path)
+    runner.run_batch(cfg, workspace=tmp_path, generate_fn=generate)
+    output = Path(cfg.output_root)
+    (output / "synth_001_doc_1" / "label.json").unlink()
+    runner.run_batch(cfg, workspace=tmp_path, generate_fn=generate)
+    assert calls == [1, 1]
+
+
+def test_resume_rejects_changed_semantic_config(tmp_path: Path):
+    from dataclasses import replace
+
+    calls: list[int] = []
+
+    def generate(case_dir, seq, seed, cfg, output_root):
+        del case_dir, seed, cfg
+        calls.append(seq)
+        path = output_root / f"synth_{seq:03d}_doc_{seq}"
+        _write_complete_output(path, seq)
+        return {"path": str(path), "doc_id": f"doc_{seq}", "seed": 0, "stats": {}}
+
+    cfg = _cfg(tmp_path)
+    runner.run_batch(cfg, workspace=tmp_path, generate_fn=generate)
+    with pytest.raises(ValueError, match="manifest"):
+        runner.run_batch(
+            replace(cfg, seed=cfg.seed + 1),
+            workspace=tmp_path,
+            generate_fn=generate,
+        )
+    assert calls == [1]
+
+
+@pytest.mark.render
+def test_two_real_generation_jobs_do_not_share_render_output(
+    tmp_path: Path,
+    tiny_case_dir: Path,
+    monkeypatch,
+):
+    from bs4 import BeautifulSoup
+    from dataclasses import replace
+
+    def fake_rewrite(html, cfg, seed=None):
+        del seed
+        soup = BeautifulSoup(html, "lxml")
+        for zh in list(soup.select("[data-node-id][data-lang='zh']")):
+            if zh.name == "img" or zh.get("data-category") not in cfg.translate_categories:
+                continue
+            en = soup.new_tag(
+                "div",
+                attrs={
+                    "data-node-id": zh["data-node-id"],
+                    "data-category": zh.get("data-category", "text"),
+                    "data-lang": "en",
+                },
+            )
+            en.string = "English text"
+            zh.insert_after(en)
+        return str(soup)
+
+    def fake_prelabel(image_paths, settings=None):
+        del settings
+        return {
+            "pages": [
+                {"page_index": index, "blocks": []}
+                for index, _ in enumerate(image_paths)
+            ]
+        }
+
+    monkeypatch.setattr(runner, "rewrite_html", fake_rewrite)
+    monkeypatch.setattr(runner, "build_prelabel", fake_prelabel)
+    cfg = replace(
+        _cfg(tmp_path, copies=2, max_workers=2),
+        source_cases=[str(tiny_case_dir)],
+        ocr=OcrConfig(url="http://fake-ocr", timeout=1),
+    )
+    runner.ensure_runtime_env(Path(__file__).resolve().parents[2])
+
+    report = runner.run_batch(cfg, workspace=tmp_path)
+
+    assert report["n_ok"] == 2
+    assert [record["seq"] for record in report["records"]] == [1, 2]
+    output_paths = [Path(record["path"]) for record in report["records"]]
+    assert len(set(output_paths)) == 2
+    for record, output in zip(report["records"], output_paths):
+        assert output.is_dir()
+        assert (output / "origin.json").is_file()
+        assert (output / "prelabel.json").is_file()
+        assert (output / "label.json").is_file()
+        assert (output / "multi-page-final.json").is_file()
+        assert list((output / "images_path").glob("raw-page-*.png"))
+        assert json.loads((output / "origin.json").read_text(encoding="utf-8"))["task_id"] == (
+            f"synth_task_{record['seq']:03d}"
+        )

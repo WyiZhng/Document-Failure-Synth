@@ -8,11 +8,20 @@ def test_load_default_config():
     cfg = load_config(Path("src/synth/config/synth.yaml"))
     assert cfg.page.width == 1000
     assert cfg.copies_per_case == 1
+    assert cfg.max_workers == 4
     assert "text" in cfg.translate_categories
     assert cfg.source_cases == ["task/source.txt"]
     assert cfg.output_root == "data/output/0714_0827"
     assert cfg.max_source_pages is None
     assert cfg.ocr.timeout == 300
+
+
+def test_load_config_rejects_non_positive_max_workers(tmp_path: Path) -> None:
+    source = Path("src/synth/config/synth.yaml").read_text(encoding="utf-8")
+    path = tmp_path / "config.yaml"
+    path.write_text(source.replace("max_workers: 4", "max_workers: 0"), encoding="utf-8")
+    with pytest.raises(ValueError, match="max_workers"):
+        load_config(path)
 
 
 def test_load_config_accepts_explicit_page_limit(tmp_path: Path) -> None:

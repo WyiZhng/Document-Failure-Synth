@@ -51,6 +51,7 @@ class SynthConfig:
     llm: LlmConfig
     ocr: OcrConfig
     column_layouts: list[str] = field(default_factory=lambda: list(ALLOWED_COLUMN_LAYOUTS))
+    max_workers: int = 4
 
 
 def load_config(path: str | Path) -> SynthConfig:
@@ -68,6 +69,9 @@ def load_config(path: str | Path) -> SynthConfig:
 
     max_pages_raw = raw.get("max_source_pages")
     max_source_pages = None if max_pages_raw is None else int(max_pages_raw)
+    max_workers = int(raw.get("max_workers", 4))
+    if max_workers <= 0:
+        raise ValueError("max_workers must be greater than 0")
 
     return SynthConfig(
         source_cases=list(raw_cases),
@@ -94,6 +98,7 @@ def load_config(path: str | Path) -> SynthConfig:
             url=str(ocr_raw.get("url") or "").strip(),
             timeout=int(ocr_raw.get("timeout") or 300),
         ),
+        max_workers=max_workers,
     )
 
 

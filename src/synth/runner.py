@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
+import hashlib
 import json
 import logging
 import os
@@ -9,8 +12,17 @@ import sys
 import time
 import traceback
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
+from src.synth.batch_state import (
+    append_progress,
+    find_recoverable_output,
+    load_latest_progress,
+    load_or_create_manifest,
+    output_is_complete,
+    write_json_atomic,
+    write_text_atomic,
+)
 from src.synth.config import SynthConfig, choose_column_layout, expand_source_cases, load_config
 from src.synth.gt_builder import build_gt
 from src.synth.html_builder import build_source_html
@@ -24,6 +36,295 @@ from src.synth.visualize import draw_overlays
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3
+
+
+@dataclass(frozen=True)
+class JobSpec:
+    job_id: str
+    seq: int
+    case_dir: Path
+    copy_index: int
+    base_seed: int
+
+
+@dataclass
+class JobResult:
+    job: JobSpec
+    status: str
+    attempts: int
+    discard_count: int
+    produced: dict[str, Any] | None = None
+    error: str = ""
+
+
+def _build_jobs(
+    case_dirs: list[Path],
+    copies_per_case: int,
+    base_seed: int,
+) -> list[JobSpec]:
+    jobs: list[JobSpec] = []
+    seq = 0
+    for case_dir in case_dirs:
+        for copy_index in range(copies_per_case):
+            seq += 1
+            jobs.append(
+                JobSpec(
+                    job_id=f"{seq:06d}",
+                    seq=seq,
+                    case_dir=case_dir,
+                    copy_index=copy_index,
+                    base_seed=base_seed + seq * 10,
+                )
+            )
+    return jobs
+
+
+def _run_job_with_retries(
+    job: JobSpec,
+    cfg: SynthConfig,
+    output_root: Path,
+    generate: Callable[[Path, int, int, SynthConfig, Path], dict],
+) -> JobResult:
+    last_error = ""
+    for attempt in range(MAX_ATTEMPTS):
+        seed = job.base_seed + attempt
+        try:
+            produced = generate(
+                job.case_dir,
+                job.seq,
+                seed,
+                cfg,
+                output_root,
+            )
+            return JobResult(
+                job=job,
+                status="ok",
+                attempts=attempt + 1,
+                discard_count=attempt,
+                produced=produced,
+            )
+        except Exception as exc:
+            last_error = str(exc) or traceback.format_exc(limit=3)
+            logger.warning(
+                "seq=%s attempt=%s failed: %s",
+                job.seq,
+                attempt + 1,
+                last_error[:300],
+            )
+    return JobResult(
+        job=job,
+        status="skipped",
+        attempts=MAX_ATTEMPTS,
+        discard_count=MAX_ATTEMPTS,
+        error=last_error[:500],
+    )
+
+
+def _record_from_result(result: JobResult) -> dict:
+    job = result.job
+    if result.status == "skipped":
+        return {
+            "seq": job.seq,
+            "case": str(job.case_dir),
+            "copy_index": job.copy_index,
+            "status": "skipped",
+            "attempts": result.attempts,
+            "discard_count": result.discard_count,
+            "error": result.error[:500],
+        }
+
+    produced = result.produced or {}
+    return {
+        "seq": job.seq,
+        "case": str(job.case_dir),
+        "copy_index": job.copy_index,
+        "status": "ok",
+        "attempts": result.attempts,
+        "discard_count": result.discard_count,
+        "path": produced.get("path"),
+        "doc_id": produced.get("doc_id"),
+        "seed": produced.get("seed"),
+        "stats": produced.get("stats") or {},
+    }
+
+
+_REPORT_FIELDS = (
+    "seq",
+    "case",
+    "copy_index",
+    "status",
+    "attempts",
+    "discard_count",
+    "path",
+    "doc_id",
+    "seed",
+    "stats",
+    "error",
+)
+
+
+def _source_case_signature(case_dir: Path) -> list[dict[str, str]]:
+    files: list[dict[str, str]] = []
+    for path in sorted(item for item in case_dir.rglob("*") if item.is_file()):
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        files.append(
+            {
+                "path": path.relative_to(case_dir).as_posix(),
+                "sha256": digest,
+            }
+        )
+    return files
+
+
+def _semantic_fingerprint_payload(
+    cfg: SynthConfig,
+    case_dirs: list[Path],
+) -> dict[str, Any]:
+    return {
+        "source_cases": [str(path.resolve()) for path in case_dirs],
+        "source_files": {
+            str(path.resolve()): _source_case_signature(path) for path in case_dirs
+        },
+        "copies_per_case": cfg.copies_per_case,
+        "max_source_pages": cfg.max_source_pages,
+        "seed": cfg.seed,
+        "translate_categories": list(cfg.translate_categories),
+        "column_layouts": list(cfg.column_layouts),
+        "page": {
+            "width": cfg.page.width,
+            "height": cfg.page.height,
+            "margin": cfg.page.margin,
+            "column_gap": cfg.page.column_gap,
+        },
+        "llm": {
+            "model": os.environ.get(cfg.llm.model_env, ""),
+            "base_url": os.environ.get(cfg.llm.base_url_env, ""),
+            "temperature": cfg.llm.temperature,
+            "max_retries": cfg.llm.max_retries,
+        },
+        "ocr": {
+            "env_url": os.environ.get("PADDLE_OCR_API_URL", "").strip().rstrip("/"),
+            "config_url": str(cfg.ocr.url or "").strip().rstrip("/"),
+            "timeout": cfg.ocr.timeout,
+        },
+    }
+
+
+def _job_manifest_payload(jobs: list[JobSpec]) -> list[dict[str, Any]]:
+    return [
+        {
+            "job_id": job.job_id,
+            "seq": job.seq,
+            "case": str(job.case_dir.resolve()),
+            "copy_index": job.copy_index,
+            "base_seed": job.base_seed,
+        }
+        for job in jobs
+    ]
+
+
+def _record_from_event(event: dict[str, Any]) -> dict[str, Any]:
+    return {key: event[key] for key in _REPORT_FIELDS if key in event}
+
+
+def _running_event(job: JobSpec, previous: dict[str, Any] | None) -> dict[str, Any]:
+    previous = previous or {}
+    return {
+        "job_id": job.job_id,
+        "seq": job.seq,
+        "case": str(job.case_dir),
+        "copy_index": job.copy_index,
+        "status": "running",
+        "attempts": int(previous.get("attempts", 0)),
+        "discard_count": int(previous.get("discard_count", 0)),
+        "updated_at": time.time(),
+    }
+
+
+def _terminal_event(
+    job: JobSpec,
+    record: dict[str, Any],
+    previous: dict[str, Any] | None,
+) -> dict[str, Any]:
+    previous = previous or {}
+    event = dict(record)
+    event.update(
+        {
+            "job_id": job.job_id,
+            "updated_at": time.time(),
+            "attempts": int(previous.get("attempts", 0))
+            + int(record.get("attempts", 0)),
+            "discard_count": int(previous.get("discard_count", 0))
+            + int(record.get("discard_count", 0)),
+        }
+    )
+    return event
+
+
+def _recovered_event(
+    job: JobSpec,
+    output_path: Path,
+    previous: dict[str, Any] | None,
+) -> dict[str, Any]:
+    origin = json.loads((output_path / "origin.json").read_text(encoding="utf-8"))
+    previous = previous or {}
+    return {
+        "job_id": job.job_id,
+        "seq": job.seq,
+        "case": str(job.case_dir),
+        "copy_index": job.copy_index,
+        "status": "ok",
+        "attempts": int(previous.get("attempts", 0)),
+        "discard_count": int(previous.get("discard_count", 0)),
+        "path": str(output_path.resolve()),
+        "doc_id": origin.get("doc_id"),
+        "seed": previous.get("seed"),
+        "stats": previous.get("stats") or {},
+        "recovered": True,
+        "updated_at": time.time(),
+    }
+
+
+def _terminal_records(
+    jobs: list[JobSpec],
+    latest: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for job in jobs:
+        event = latest.get(job.job_id)
+        if event is None or event.get("status") not in {"ok", "skipped"}:
+            continue
+        records.append(_record_from_event(event))
+    return records
+
+
+def _write_batch_checkpoint(
+    output_root: Path,
+    jobs: list[JobSpec],
+    latest: dict[str, dict[str, Any]],
+    started: float,
+) -> dict:
+    records = _terminal_records(jobs, latest)
+    records.sort(key=lambda record: int(record["seq"]))
+    successes = [
+        str(record["path"])
+        for record in records
+        if record.get("status") == "ok" and record.get("path")
+    ]
+    report = {
+        "n_ok": sum(record.get("status") == "ok" for record in records),
+        "n_skip": sum(record.get("status") == "skipped" for record in records),
+        "n_discard": sum(int(record.get("discard_count", 0)) for record in records),
+        "n_planned": len(jobs),
+        "elapsed_sec": round(time.time() - started, 2),
+        "records": records,
+    }
+    write_json_atomic(output_root / "report.json", report)
+    write_text_atomic(
+        output_root / "synth_input_path.txt",
+        "\n".join(successes) + ("\n" if successes else ""),
+    )
+    return report
 
 
 def _load_dotenv(workspace: Path) -> None:
@@ -210,78 +511,94 @@ def run_batch(
     output_root.mkdir(parents=True, exist_ok=True)
 
     started = time.time()
-    records: list[dict] = []
-    successes: list[str] = []
-    n_ok = 0
-    n_skip = 0
-    n_discard = 0
-    seq = 0
     case_dirs = expand_source_cases(cfg.source_cases, workspace)
+    jobs = _build_jobs(case_dirs, cfg.copies_per_case, cfg.seed)
     logger.info(
         "batch cases=%s copies_per_case=%s",
         [str(path) for path in case_dirs],
         cfg.copies_per_case,
     )
 
-    for case_dir in case_dirs:
-        for copy_index in range(cfg.copies_per_case):
-            seq += 1
-            last_error = ""
-            produced = None
-            for attempt in range(MAX_ATTEMPTS):
-                seed = cfg.seed + seq * 10 + attempt
-                try:
-                    produced = generate(case_dir, seq, seed, cfg, output_root)
-                    break
-                except Exception as exc:
-                    n_discard += 1
-                    last_error = str(exc) or traceback.format_exc(limit=3)
-                    logger.warning(
-                        "seq=%s attempt=%s failed: %s", seq, attempt + 1, last_error[:300]
-                    )
-            if produced is None:
-                n_skip += 1
-                records.append(
-                    {
-                        "seq": seq,
-                        "case": str(case_dir),
-                        "copy_index": copy_index,
-                        "status": "skipped",
-                        "attempts": MAX_ATTEMPTS,
-                        "error": last_error[:500],
-                    }
-                )
-                continue
-            n_ok += 1
-            successes.append(produced["path"])
-            records.append(
-                {
-                    "seq": seq,
-                    "case": str(case_dir),
-                    "copy_index": copy_index,
-                    "status": "ok",
-                    "path": produced["path"],
-                    "doc_id": produced.get("doc_id"),
-                    "seed": produced.get("seed"),
-                    "stats": produced.get("stats") or {},
-                }
-            )
+    manifest_path = output_root / "batch_manifest.json"
+    progress_path = output_root / "progress.jsonl"
+    _manifest, manifest_created = load_or_create_manifest(
+        manifest_path,
+        fingerprint_payload=_semantic_fingerprint_payload(cfg, case_dirs),
+        jobs=_job_manifest_payload(jobs),
+    )
+    latest = load_latest_progress(progress_path)
 
-    report = {
-        "n_ok": n_ok,
-        "n_skip": n_skip,
-        "n_discard": n_discard,
-        "n_planned": len(case_dirs) * cfg.copies_per_case,
-        "elapsed_sec": round(time.time() - started, 2),
-        "records": records,
-    }
-    (output_root / "report.json").write_text(
-        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    pending: list[JobSpec] = []
+    for job in jobs:
+        previous = latest.get(job.job_id)
+        previous_path = previous.get("path") if previous else None
+        if (
+            previous
+            and previous.get("status") == "ok"
+            and previous_path
+            and output_is_complete(Path(previous_path), job.seq)
+        ):
+            continue
+
+        if not manifest_created:
+            recovered = find_recoverable_output(output_root, job.seq)
+            if recovered is not None:
+                event = _recovered_event(job, recovered, previous)
+                append_progress(progress_path, event)
+                latest[job.job_id] = event
+                continue
+        pending.append(job)
+
+    if not pending:
+        return _write_batch_checkpoint(output_root, jobs, latest, started)
+    _write_batch_checkpoint(output_root, jobs, latest, started)
+
+    executor = ThreadPoolExecutor(
+        max_workers=cfg.max_workers,
+        thread_name_prefix="synth",
     )
-    (output_root / "synth_input_path.txt").write_text(
-        "\n".join(successes) + ("\n" if successes else ""), encoding="utf-8"
-    )
-    return report
+    futures = {}
+    try:
+        for job in pending:
+            running = _running_event(job, latest.get(job.job_id))
+            append_progress(progress_path, running)
+            latest[job.job_id] = running
+            futures[
+                executor.submit(
+                    _run_job_with_retries,
+                    job,
+                    cfg,
+                    output_root,
+                    generate,
+                )
+            ] = job
+
+        for future in as_completed(futures):
+            job = futures[future]
+            previous = latest.get(job.job_id)
+            try:
+                result = future.result()
+            except Exception as exc:
+                error = str(exc) or traceback.format_exc(limit=3)
+                result = JobResult(
+                    job=job,
+                    status="skipped",
+                    attempts=1,
+                    discard_count=1,
+                    error=error[:500],
+                )
+            record = _record_from_result(result)
+            event = _terminal_event(job, record, previous)
+            append_progress(progress_path, event)
+            latest[job.job_id] = event
+            _write_batch_checkpoint(output_root, jobs, latest, started)
+    except KeyboardInterrupt:
+        executor.shutdown(wait=False, cancel_futures=True)
+        raise
+    else:
+        executor.shutdown(wait=True)
+
+    return _write_batch_checkpoint(output_root, jobs, latest, started)
 
 
 def main(argv: list[str] | None = None) -> int:
