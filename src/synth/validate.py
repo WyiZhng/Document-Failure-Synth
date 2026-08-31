@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from collections import Counter
+from collections import defaultdict
 
 from src.synth.config import SynthConfig
 from src.synth.material import IMAGE_CATEGORIES, Material, iter_source_blocks
@@ -17,6 +17,10 @@ class ValidationResult:
 
 def _is_translatable(category: str, cfg: SynthConfig) -> bool:
     return category in cfg.translate_categories and category not in IMAGE_CATEGORIES
+
+
+def _is_splittable_category(category: str) -> bool:
+    return category == "text"
 
 
 def _english_ratio(text: str) -> float:
@@ -36,6 +40,26 @@ def _x_ranges_overlap(
     return ax1 < bx2 and bx1 < ax2
 
 
+def _placed_sort_key(block: PlacedBlock) -> tuple[int, int, int, float, float]:
+    return (
+        block.order,
+        block.fragment_index,
+        block.page,
+        block.bbox[1],
+        block.bbox[0],
+    )
+
+
+def _fragment_sort_key(block: PlacedBlock) -> tuple[int, int, int, float, float]:
+    return (
+        block.fragment_index,
+        block.page,
+        block.order,
+        block.bbox[1],
+        block.bbox[0],
+    )
+
+
 def validate_doc(
     source_tree: list[dict],
     placed: list[PlacedBlock],
@@ -45,8 +69,8 @@ def validate_doc(
 ) -> ValidationResult:
     errors: list[str] = []
 
-    zh_blocks = sorted((p for p in placed if p.lang == "zh"), key=lambda p: p.order)
-    en_blocks = [p for p in placed if p.lang == "en"]
+    zh_blocks = sorted((p for p in placed if p.lang == "zh"), key=_placed_sort_key)
+    en_blocks = sorted((p for p in placed if p.lang == "en"), key=_placed_sort_key)
     if material is None:
         source_blocks = [
             block
@@ -64,11 +88,27 @@ def validate_doc(
             }
             for block in material.blocks
         ]
-    source_by_id = {b["id"]: b for b in source_blocks}
+    source_by_id = {str(b["id"]): b for b in source_blocks}
+
+    zh_by_id: dict[str, list[PlacedBlock]] = defaultdict(list)
+    for zh in zh_blocks:
+        zh_by_id[zh.node_id].append(zh)
+    en_by_id: dict[str, list[PlacedBlock]] = defaultdict(list)
+    for en in en_blocks:
+        en_by_id[en.node_id].append(en)
+    for fragments in (*zh_by_id.values(), *en_by_id.values()):
+        fragments.sort(key=_fragment_sort_key)
 
     zh_ids = [b.node_id for b in zh_blocks]
-    source_ids = [b["id"] for b in source_blocks]
-    zh_id_set = set(zh_ids)
+    zh_unique_ids: list[str] = []
+    seen_zh_ids: set[str] = set()
+    for node_id in zh_ids:
+        if node_id not in seen_zh_ids:
+            seen_zh_ids.add(node_id)
+            zh_unique_ids.append(node_id)
+
+    source_ids = [str(b["id"]) for b in source_blocks]
+    zh_id_set = set(zh_by_id)
     source_id_set = set(source_ids)
 
     for node_id in sorted(source_id_set - zh_id_set):
@@ -76,53 +116,46 @@ def validate_doc(
     for node_id in sorted(zh_id_set - source_id_set):
         errors.append(f"extra zh block: {node_id}")
 
-    for node_id, count in sorted(Counter(zh_ids).items()):
-        if count > 1:
-            errors.append(f"duplicate zh block: {node_id}")
-
-    if source_id_set == zh_id_set and zh_ids != source_ids:
-        for idx, (zh, src) in enumerate(zip(zh_blocks, source_blocks)):
-            if zh.node_id != src["id"]:
+    if source_id_set == zh_id_set and zh_unique_ids != source_ids:
+        for idx, (zh_id, src_id) in enumerate(zip(zh_unique_ids, source_ids)):
+            if zh_id != src_id:
                 errors.append(
-                    f"zh order mismatch at index {idx}: expected {src['id']}, got {zh.node_id}"
+                    f"zh order mismatch at index {idx}: expected {src_id}, got {zh_id}"
                 )
                 break
 
-    for zh in zh_blocks:
-        src = source_by_id.get(zh.node_id)
+    for node_id, zh_list in sorted(zh_by_id.items()):
+        src = source_by_id.get(node_id)
         if src is None:
             continue
-        if zh.category != src["category"]:
+        if len(zh_list) > 1 and not _is_splittable_category(src["category"]):
+            errors.append(f"duplicate zh block: {node_id}")
+        if any(zh.category != src["category"] for zh in zh_list):
             errors.append(
-                f"category mismatch for {zh.node_id}: expected {src['category']}, got {zh.category}"
+                f"category mismatch for {node_id}: expected {src['category']}"
             )
-        if zh.text.strip() != src["text"]:
-            errors.append(f"text mismatch for {zh.node_id}")
-
-    en_by_id: dict[str, list[PlacedBlock]] = {}
-    for en in en_blocks:
-        en_by_id.setdefault(en.node_id, []).append(en)
-
-    zh_by_id = {b.node_id: b for b in zh_blocks}
+        joined_text = "".join(zh.text for zh in zh_list).strip()
+        if joined_text != str(src["text"]).strip():
+            errors.append(f"text mismatch for {node_id}")
 
     for en in en_blocks:
         if en.node_id not in zh_by_id:
             errors.append(f"en block without zh: {en.node_id}")
 
-    for zh in zh_blocks:
-        node_id = zh.node_id
+    for node_id, zh_list in sorted(zh_by_id.items()):
         en_list = en_by_id.get(node_id, [])
+        category = zh_list[0].category if zh_list else "text"
 
-        if _is_translatable(zh.category, cfg):
+        if _is_translatable(category, cfg):
             if len(en_list) == 0:
                 errors.append(f"missing en block: {node_id}")
-            elif len(en_list) > 1:
+            elif len(en_list) > 1 and not _is_splittable_category(category):
                 errors.append(f"duplicate en block: {node_id}")
             else:
-                en = en_list[0]
-                if not en.text.strip():
+                joined_en = "".join(en.text for en in en_list).strip()
+                if not joined_en:
                     errors.append(f"empty en text: {node_id}")
-                elif _english_ratio(en.text) <= 0.5:
+                elif _english_ratio(joined_en) <= 0.5:
                     errors.append(f"en text not sufficiently English: {node_id}")
         elif en_list:
             errors.append(f"unexpected en block for non-translatable: {node_id}")
@@ -135,22 +168,20 @@ def validate_doc(
         if not (0 <= y1 < y2 <= cfg.page.height):
             errors.append(f"invalid bbox y for {node_id} ({block.lang}): {block.bbox}")
 
-    for zh in zh_blocks:
-        en_list = en_by_id.get(zh.node_id, [])
+    for node_id, zh_list in sorted(zh_by_id.items()):
+        en_list = en_by_id.get(node_id, [])
         if not en_list:
             continue
-        en = en_list[0]
-        if en.page != zh.page:
-            errors.append(
-                f"zh/en page split for {zh.node_id}: zh={zh.page} en={en.page}"
-            )
-        if zh.page == en.page and _x_ranges_overlap(zh.bbox, en.bbox):
-            errors.append(f"zh/en x overlap on page {zh.page}: {zh.node_id}")
+        for zh in zh_list:
+            for en in en_list:
+                if zh.page == en.page and _x_ranges_overlap(zh.bbox, en.bbox):
+                    errors.append(f"zh/en x overlap on page {zh.page}: {node_id}")
 
     en_cross_page = sum(
         1
-        for zh in zh_blocks
-        if (en_list := en_by_id.get(zh.node_id, [])) and en_list[0].page > zh.page
+        for node_id, zh_list in zh_by_id.items()
+        if (en_list := en_by_id.get(node_id, []))
+        and max(en.page for en in en_list) > max(zh.page for zh in zh_list)
     )
 
     link_stats = {

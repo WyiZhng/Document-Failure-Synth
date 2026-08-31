@@ -2,7 +2,8 @@
  * Deterministic two-column pagination for marked synth HTML blocks.
  * Injected by Playwright; returns placement table in page pixel coordinates.
  *
- * 中英成对同页:下游 merge 用 member 身份对齐,无法把跨页的 zh/en 半节点合并回一个节点。
+ * 中英文列独立分页。普通 text 块可以在列底部切成多个物理片段,但每个片段
+ * 保留同一个 source node id,供下游重建成一个跨页逻辑节点。
  */
 function paginateDocument(config) {
   const { width, height, margin, columnGap } = config;
@@ -53,8 +54,9 @@ function paginateDocument(config) {
     el.style.margin = "0";
   }
 
-  function measureHeight(el) {
+  function measureHeight(el, textOverride = null) {
     const clone = el.cloneNode(true);
+    if (textOverride !== null) clone.textContent = textOverride;
     applyColumnSizing(clone);
     clone.style.position = "static";
     measureRoot.innerHTML = "";
@@ -63,6 +65,7 @@ function paginateDocument(config) {
   }
 
   const BLOCK_GAP = 8;
+  const pageBottom = margin + contentH;
 
   const enBuckets = new Map();
   for (const en of enItems) {
@@ -82,39 +85,128 @@ function paginateDocument(config) {
   }
 
   const pages = [{ zh: [], en: [] }];
-  let pageIdx = 0;
-  const cursor = { left: margin, right: margin };
+  const columns = {
+    left: { page: 0, y: margin },
+    right: { page: 0, y: margin },
+  };
 
-  function fits(y, blockH) {
-    return y + blockH <= margin + contentH;
+  function ensurePage(page) {
+    while (pages.length <= page) pages.push({ zh: [], en: [] });
   }
 
-  function newPage() {
-    pageIdx += 1;
-    pages[pageIdx] = { zh: [], en: [] };
-    cursor.left = margin;
-    cursor.right = margin;
+  function advanceColumn(side) {
+    columns[side].page += 1;
+    columns[side].y = margin;
+    ensurePage(columns[side].page);
+  }
+
+  function fits(y, blockH) {
+    return y + blockH <= pageBottom;
+  }
+
+  function canSplit(item) {
+    const tagName = item.el.tagName.toLowerCase();
+    return (
+      item.category === "text" &&
+      tagName === "div" &&
+      item.el.children.length === 0 &&
+      !item.el.style.height &&
+      item.text.length > 0
+    );
+  }
+
+  function largestFittingPrefix(item, text, availableH) {
+    const chars = Array.from(text);
+    if (!chars.length || availableH <= 0) return null;
+
+    let low = 1;
+    let high = chars.length;
+    let best = 0;
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const candidate = chars.slice(0, mid).join("");
+      if (measureHeight(item.el, candidate) <= availableH) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    if (!best) return null;
+    return {
+      head: chars.slice(0, best).join(""),
+      tail: chars.slice(best).join(""),
+    };
+  }
+
+  function appendSlot(item, page, y, h, textOverride, fragmentIndex) {
+    ensurePage(page);
+    pages[page][item.lang].push({
+      item,
+      y,
+      h,
+      textOverride,
+      fragmentIndex,
+    });
+  }
+
+  function placeItem(item) {
+    const side = sideOf(item.lang);
+    const split = canSplit(item);
+    let remaining = split ? item.text : null;
+    let fragmentIndex = 0;
+
+    while (true) {
+      const state = columns[side];
+      ensurePage(state.page);
+      const fullH = measureHeight(item.el, split ? remaining : null);
+
+      if (fits(state.y, fullH)) {
+        appendSlot(item, state.page, state.y, fullH, split ? remaining : null, fragmentIndex);
+        state.y += fullH + BLOCK_GAP;
+        return;
+      }
+
+      if (!split) {
+        if (state.y > margin) {
+          advanceColumn(side);
+          continue;
+        }
+        // Preserve the old behavior for an indivisible block taller than a page.
+        appendSlot(item, state.page, state.y, fullH, null, fragmentIndex);
+        state.y += fullH + BLOCK_GAP;
+        return;
+      }
+
+      const availableH = state.y > margin ? pageBottom - state.y : contentH;
+      const fragment = largestFittingPrefix(item, remaining, availableH);
+      if (!fragment) {
+        if (state.y > margin) {
+          advanceColumn(side);
+          continue;
+        }
+        // A pathological unbreakable text block should still make progress.
+        appendSlot(item, state.page, state.y, fullH, remaining, fragmentIndex);
+        state.y += fullH + BLOCK_GAP;
+        return;
+      }
+
+      const fragmentH = measureHeight(item.el, fragment.head);
+      appendSlot(item, state.page, state.y, fragmentH, fragment.head, fragmentIndex);
+      state.y += fragmentH;
+      remaining = fragment.tail;
+      fragmentIndex += 1;
+      if (!remaining) {
+        state.y += BLOCK_GAP;
+        return;
+      }
+    }
   }
 
   for (const pair of pairs) {
-    const zhH = pair.zh ? measureHeight(pair.zh.el) : 0;
-    const enH = pair.en ? measureHeight(pair.en.el) : 0;
-    const zhSide = pair.zh ? sideOf("zh") : null;
-    const enSide = pair.en ? sideOf("en") : null;
-    const zhNeedsPage =
-      Boolean(pair.zh) && !fits(cursor[zhSide], zhH) && cursor[zhSide] > margin;
-    const enNeedsPage =
-      Boolean(pair.en) && !fits(cursor[enSide], enH) && cursor[enSide] > margin;
-    if (zhNeedsPage || enNeedsPage) newPage();
-
-    if (pair.zh) {
-      pages[pageIdx].zh.push({ item: pair.zh, y: cursor[zhSide], h: zhH });
-      cursor[zhSide] += zhH + BLOCK_GAP;
-    }
-    if (pair.en) {
-      pages[pageIdx].en.push({ item: pair.en, y: cursor[enSide], h: enH });
-      cursor[enSide] += enH + BLOCK_GAP;
-    }
+    if (pair.zh) placeItem(pair.zh);
+    if (pair.en) placeItem(pair.en);
   }
 
   document.body.innerHTML = "";
@@ -127,28 +219,31 @@ function paginateDocument(config) {
 
   const placements = [];
 
-  function placeBlock(pageEl, sourceEl, x, y, placedPage, item) {
+  function placeBlock(pageEl, sourceEl, x, y, placedPage, slot) {
     const el = sourceEl.cloneNode(true);
+    if (slot.textOverride !== null) el.textContent = slot.textOverride;
     applyColumnSizing(el);
     el.style.position = "absolute";
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
     el.setAttribute("data-placed", "true");
+    el.setAttribute("data-fragment-index", String(slot.fragmentIndex));
     pageEl.appendChild(el);
 
     const pageRect = pageEl.getBoundingClientRect();
     const rect = el.getBoundingClientRect();
     placements.push({
-      node_id: item.nodeId,
-      lang: item.lang,
-      category: item.category,
+      node_id: slot.item.nodeId,
+      lang: slot.item.lang,
+      category: slot.item.category,
       page: placedPage,
+      fragment_index: slot.fragmentIndex,
       x1: rect.left - pageRect.left,
       y1: rect.top - pageRect.top,
       x2: rect.right - pageRect.left,
       y2: rect.bottom - pageRect.top,
-      text: item.text,
-      order: item.order,
+      text: slot.textOverride === null ? slot.item.text : slot.textOverride,
+      order: slot.item.order,
     });
   }
 
@@ -164,10 +259,10 @@ function paginateDocument(config) {
     root.appendChild(pageEl);
 
     for (const slot of pages[idx].zh) {
-      placeBlock(pageEl, slot.item.el, zhX, slot.y, idx, slot.item);
+      placeBlock(pageEl, slot.item.el, zhX, slot.y, idx, slot);
     }
     for (const slot of pages[idx].en) {
-      placeBlock(pageEl, slot.item.el, enX, slot.y, idx, slot.item);
+      placeBlock(pageEl, slot.item.el, enX, slot.y, idx, slot);
     }
   }
 

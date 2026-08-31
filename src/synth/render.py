@@ -20,6 +20,7 @@ class PlacedBlock:
     bbox: tuple[float, float, float, float]
     text: str
     order: int
+    fragment_index: int = 0
 
 
 def _raw_to_placed(raw: dict) -> PlacedBlock:
@@ -31,13 +32,15 @@ def _raw_to_placed(raw: dict) -> PlacedBlock:
         bbox=(float(raw["x1"]), float(raw["y1"]), float(raw["x2"]), float(raw["y2"])),
         text=str(raw.get("text", "")),
         order=int(raw["order"]),
+        fragment_index=int(raw.get("fragment_index", 0)),
     )
 
 
 def _verify_bbox_against_dom(page, placed: PlacedBlock) -> None:
     selector = (
         f'.synth-page[data-page-index="{placed.page}"] '
-        f'[data-node-id="{placed.node_id}"][data-lang="{placed.lang}"][data-placed="true"]'
+        f'[data-node-id="{placed.node_id}"][data-lang="{placed.lang}"]'
+        f'[data-fragment-index="{placed.fragment_index}"][data-placed="true"]'
     )
     handle = page.query_selector(selector)
     if handle is None:
@@ -119,4 +122,4 @@ def render_pages(
         browser.close()
 
     html_file.unlink(missing_ok=True)
-    return sorted(placed, key=lambda p: (p.order, p.lang))
+    return sorted(placed, key=lambda p: (p.order, p.lang, p.fragment_index, p.page))

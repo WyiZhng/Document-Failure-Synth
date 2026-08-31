@@ -106,6 +106,60 @@ def test_cross_page_translation_makes_multipage_node(material_fixture, cfg, tmp_
     assert node["page_index"] == [0, 1]
 
 
+def test_split_zh_en_fragments_rebuild_one_logical_node(material_fixture, cfg, tmp_path):
+    placed = [
+        PlacedBlock("p0-b1", "zh", "paragraph_title", 0, _left(100, 150), "标题一", 0),
+        PlacedBlock("p0-b1", "en", "paragraph_title", 0, _right(100, 150), "Title One", 1),
+        PlacedBlock(
+            "p0-b2",
+            "zh",
+            "text",
+            0,
+            _left(200, 250),
+            "正文",
+            2,
+            fragment_index=0,
+        ),
+        PlacedBlock(
+            "p0-b2",
+            "zh",
+            "text",
+            1,
+            _left(100, 150),
+            "内容",
+            2,
+            fragment_index=1,
+        ),
+        PlacedBlock(
+            "p0-b2",
+            "en",
+            "text",
+            0,
+            _right(200, 250),
+            "Body ",
+            3,
+            fragment_index=0,
+        ),
+        PlacedBlock(
+            "p0-b2",
+            "en",
+            "text",
+            1,
+            _right(100, 150),
+            "content",
+            3,
+            fragment_index=1,
+        ),
+    ]
+    build_gt(material_fixture, placed, tmp_path, cfg, seq=6)
+    tree = json.loads((tmp_path / "multi-page-final.json").read_text())["doc"]
+    node = next(node for node in _walk(tree) if len(node.get("member") or []) == 4)
+
+    assert node["page_index"] == [0, 1, 0, 1]
+    assert len(node["bbox"]) == len(node["member"]) == 4
+    assert node["category"] == ["text"] * 4
+
+
 def test_label_ids_match_tree_members(material_fixture, cfg, tmp_path):
     build_gt(material_fixture, _same_page_placed(), tmp_path, cfg, seq=1)
     label = json.loads((tmp_path / "label.json").read_text())
@@ -179,6 +233,47 @@ def test_gt_preserves_virtual_link_target(tiny_case_with_link, cfg, tmp_path):
         for member in node.get("member") or []
     }
     assert label_ids == tree_ids
+
+
+def test_gt_preserves_link_target_with_split_translation(
+    tiny_case_with_late_link, cfg, tmp_path
+):
+    material = load_material(tiny_case_with_late_link, cfg, tmp_path / "assets")
+    placed = [
+        PlacedBlock("p0-b1", "zh", "paragraph_title", 0, _left(100, 150), "标题一", 0),
+        PlacedBlock("p0-b1", "en", "paragraph_title", 0, _right(100, 150), "Title One", 1),
+        PlacedBlock("p0-b2", "zh", "text", 0, _left(200, 250), "正文内容", 2),
+        PlacedBlock("p0-b2", "en", "text", 0, _right(200, 250), "Body content", 3),
+        PlacedBlock("p5-b1", "zh", "text", 5, _left(100, 150), "后页正文", 4),
+        PlacedBlock(
+            "p5-b1",
+            "en",
+            "text",
+            5,
+            _right(100, 150),
+            "Later ",
+            5,
+            fragment_index=0,
+        ),
+        PlacedBlock(
+            "p5-b1",
+            "en",
+            "text",
+            6,
+            _right(100, 150),
+            "body",
+            5,
+            fragment_index=1,
+        ),
+    ]
+    build_gt(material, placed, tmp_path / "out", cfg, seq=7)
+    tree = json.loads((tmp_path / "out" / "multi-page-final.json").read_text())["doc"]
+
+    anchors = [node for node in _walk_with_links(tree) if node.get("link")]
+    assert len(anchors) == 1
+    target = anchors[0]["link_to"][0]
+    assert target["page_index"] == [5, 5, 6]
+    assert len(target["member"]) == 3
 
 
 def test_gt_reuses_shared_target_output_id(tiny_case_with_shared_link, cfg, tmp_path):

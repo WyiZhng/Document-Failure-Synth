@@ -17,13 +17,13 @@ def _sort_key(block: PlacedBlock) -> tuple[float, float, int]:
 def _assign_ids(
     placed: list[PlacedBlock],
     page_width: float,
-) -> dict[tuple[str, str], PlacedBlock]:
+) -> dict[tuple[str, str], list[PlacedBlock]]:
     by_page: dict[int, list[PlacedBlock]] = defaultdict(list)
     for block in placed:
         by_page[block.page].append(block)
 
     mid = float(page_width) / 2.0
-    mapped: dict[tuple[str, str], PlacedBlock] = {}
+    mapped: dict[tuple[str, str], list[PlacedBlock]] = defaultdict(list)
     for page in sorted(by_page):
         left: list[PlacedBlock] = []
         right: list[PlacedBlock] = []
@@ -33,8 +33,25 @@ def _assign_ids(
         ordered = sorted(left, key=_sort_key) + sorted(right, key=_sort_key)
         for index, block in enumerate(ordered, start=1):
             block.__dict__["new_id"] = f"p{page}-b{index}"
-            mapped[(block.node_id, block.lang)] = block
+            mapped[(block.node_id, block.lang)].append(block)
     return mapped
+
+
+def _mapped_parts(
+    mapped: dict[tuple[str, str], list[PlacedBlock]],
+    source_id: str,
+    lang: str,
+) -> list[PlacedBlock]:
+    return sorted(
+        mapped.get((str(source_id), lang), []),
+        key=lambda block: (
+            block.fragment_index,
+            block.page,
+            block.order,
+            block.bbox[1],
+            block.bbox[0],
+        ),
+    )
 
 
 def _first_page(node: dict) -> int:
@@ -55,7 +72,7 @@ def _virtual_category(node: dict) -> str:
 
 def _rebuild_node(
     node: dict,
-    mapped: dict[tuple[str, str], PlacedBlock],
+    mapped: dict[tuple[str, str], list[PlacedBlock]],
     fake_counter: list[int],
     nodes_by_id: dict[str, dict],
     cache: dict[str, dict | None],
@@ -115,16 +132,17 @@ def _rebuild_node(
     texts: list[str] = []
 
     for member_id in _as_list(source_node.get("member")):
-        zh = mapped.get((str(member_id), "zh"))
-        if zh is None:
+        zh_parts = _mapped_parts(mapped, str(member_id), "zh")
+        if not zh_parts:
             continue
-        members.append(str(zh.__dict__["new_id"]))
-        pages.append(zh.page)
-        bboxes.append([float(v) for v in zh.bbox])
-        categories.append(zh.category)
-        texts.append("")
-        en = mapped.get((str(member_id), "en"))
-        if en is not None:
+        for zh in zh_parts:
+            members.append(str(zh.__dict__["new_id"]))
+            pages.append(zh.page)
+            bboxes.append([float(v) for v in zh.bbox])
+            categories.append(zh.category)
+            texts.append("")
+
+        for en in _mapped_parts(mapped, str(member_id), "en"):
             members.append(str(en.__dict__["new_id"]))
             pages.append(en.page)
             bboxes.append([float(v) for v in en.bbox])
@@ -187,7 +205,7 @@ def _rebuild_node(
 def _rebuild_link_targets(
     rebuilt: dict,
     source_node: dict,
-    mapped: dict[tuple[str, str], PlacedBlock],
+    mapped: dict[tuple[str, str], list[PlacedBlock]],
     fake_counter: list[int],
     nodes_by_id: dict[str, dict],
     cache: dict[str, dict | None],

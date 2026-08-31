@@ -246,7 +246,7 @@ def test_page_projection_detects_sandwich():
     assert validate_page_projection(clean) == []
 
 
-def test_zh_en_page_split_fails(cfg):
+def test_zh_en_page_split_passes(cfg):
     placed = [
         PlacedBlock("p0-b1", "zh", "paragraph_title", 0, _left_bbox(100, 150), "标题一", 0),
         PlacedBlock("p0-b1", "en", "paragraph_title", 1, _right_bbox(100, 150), "Title One", 1),
@@ -254,8 +254,62 @@ def test_zh_en_page_split_fails(cfg):
         PlacedBlock("p0-b2", "en", "text", 0, _right_bbox(200, 250), "Body content", 3),
     ]
     result = validate_doc(_base_tree(), placed, cfg)
-    _assert_fails_with_node_id(result, "p0-b1")
+    assert result.ok
+    assert result.errors == []
     assert result.stats["en_cross_page"] == 1
+
+
+def test_split_zh_en_fragments_pass(cfg):
+    placed = [
+        PlacedBlock("p0-b1", "zh", "paragraph_title", 0, _left_bbox(100, 150), "标题一", 0),
+        PlacedBlock("p0-b1", "en", "paragraph_title", 0, _right_bbox(100, 150), "Title One", 1),
+        PlacedBlock(
+            "p0-b2",
+            "zh",
+            "text",
+            0,
+            _left_bbox(200, 250),
+            "正文",
+            2,
+            fragment_index=0,
+        ),
+        PlacedBlock(
+            "p0-b2",
+            "zh",
+            "text",
+            1,
+            _left_bbox(100, 150),
+            "内容",
+            2,
+            fragment_index=1,
+        ),
+        PlacedBlock(
+            "p0-b2",
+            "en",
+            "text",
+            0,
+            _right_bbox(200, 250),
+            "Body ",
+            3,
+            fragment_index=0,
+        ),
+        PlacedBlock(
+            "p0-b2",
+            "en",
+            "text",
+            1,
+            _right_bbox(100, 150),
+            "content",
+            3,
+            fragment_index=1,
+        ),
+    ]
+    result = validate_doc(_base_tree(), placed, cfg)
+    assert result.ok
+    assert result.errors == []
+    assert result.stats["n_zh"] == 3
+    assert result.stats["n_en"] == 3
+    assert result.stats["en_cross_page"] == 0
 
 
 def test_later_source_pages_are_ignored(cfg):

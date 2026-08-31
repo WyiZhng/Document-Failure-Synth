@@ -14,7 +14,7 @@ div.block { min-height: 1px; }
 .block[data-category="doc_title"] { font-size: 22px; font-weight: 700; text-align: center; }
 .block[data-category="paragraph_title"] { font-size: 18px; font-weight: 700; }
 .block[data-category="header"], .block[data-category="footer"] { color: #555; font-size: 12px; }
-/* 译文用小一号字体:双语文档常见排式,同时抑制英文列跨页滞后 */
+/* 译文用小一号字体:双语文档常见排式 */
 .block[data-lang="en"] { font-size: 0.82em; line-height: 1.45; color: #222; }
 img.block { display: block; max-width: 100%; height: auto; }
 """.strip()

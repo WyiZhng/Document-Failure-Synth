@@ -34,6 +34,22 @@ def make_bilingual_test_html() -> str:
     return f"<!DOCTYPE html><html><body>{''.join(parts)}</body></html>"
 
 
+def make_long_bilingual_test_html() -> tuple[str, str]:
+    english = (
+        "This English sentence is intentionally repeated to exercise a real "
+        "page continuation. "
+    ) * 100
+    html = (
+        "<!DOCTYPE html><html><body>"
+        '<div class="block" data-node-id="long" data-category="text" '
+        'data-lang="zh">这是一段较短的中文。</div>'
+        f'<div class="block" data-node-id="long" data-category="text" '
+        f'data-lang="en">{english}</div>'
+        "</body></html>"
+    )
+    return html, english.strip()
+
+
 @pytest.fixture
 def cfg():
     return load_config(Path("src/synth/config/synth.yaml"))
@@ -51,7 +67,7 @@ def test_render_zh_only_single_column(cfg, tmp_path):
 
 
 @pytest.mark.render
-def test_render_bilingual_two_columns_overflow(cfg, tmp_path):
+def test_render_bilingual_columns_paginate_independently(cfg, tmp_path):
     html = make_bilingual_test_html()
     placed = render_pages(html, tmp_path, cfg)
     en_pages = {p.page for p in placed if p.lang == "en"}
@@ -60,9 +76,47 @@ def test_render_bilingual_two_columns_overflow(cfg, tmp_path):
     en = [p for p in placed if p.lang == "en" and p.page == 0]
     assert max(b.bbox[2] for b in zh) <= min(b.bbox[0] for b in en)
     zh_page = {p.node_id: p.page for p in placed if p.lang == "zh"}
-    for block in placed:
-        if block.lang == "en":
-            assert block.page == zh_page[block.node_id]
+    assert any(
+        block.lang == "en" and block.page != zh_page[block.node_id]
+        for block in placed
+    )
+
+
+@pytest.mark.render
+def test_render_text_block_splits_across_pages(cfg, tmp_path):
+    html, english = make_long_bilingual_test_html()
+    placed = render_pages(html, tmp_path, cfg)
+    zh = [block for block in placed if block.lang == "zh"]
+    en = [block for block in placed if block.lang == "en"]
+
+    assert [block.page for block in zh] == [0]
+    assert len(en) > 1
+    assert [block.fragment_index for block in en] == list(range(len(en)))
+    assert [block.page for block in en] == list(range(len(en)))
+    assert "".join(block.text for block in en) == english
+    for block in en:
+        assert 0 <= block.bbox[0] < block.bbox[2] <= cfg.page.width
+        assert 0 <= block.bbox[1] < block.bbox[3] <= cfg.page.height
+
+
+@pytest.mark.render
+def test_render_chinese_text_block_splits_across_pages(cfg, tmp_path):
+    chinese = (
+        "这是一段用于验证中文文本跨页的内容，分页后下一页应当继续同一个逻辑节点。"
+        * 300
+    ).strip()
+    html = (
+        "<!DOCTYPE html><html><body>"
+        f'<div class="block" data-node-id="zh-long" data-category="text" '
+        f'data-lang="zh">{chinese}</div>'
+        "</body></html>"
+    )
+    placed = render_pages(html, tmp_path, cfg)
+
+    assert len(placed) > 1
+    assert [block.fragment_index for block in placed] == list(range(len(placed)))
+    assert [block.page for block in placed] == list(range(len(placed)))
+    assert "".join(block.text for block in placed) == chinese
 
 
 @pytest.mark.render
