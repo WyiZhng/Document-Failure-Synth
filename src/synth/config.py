@@ -43,7 +43,7 @@ class OcrConfig:
 class SynthConfig:
     source_cases: list[str]
     copies_per_case: int
-    max_source_pages: int
+    max_source_pages: int | None
     seed: int
     output_root: str
     translate_categories: list[str]
@@ -66,10 +66,13 @@ def load_config(path: str | Path) -> SynthConfig:
     elif not raw_cases:
         raw_cases = []
 
+    max_pages_raw = raw.get("max_source_pages")
+    max_source_pages = None if max_pages_raw is None else int(max_pages_raw)
+
     return SynthConfig(
         source_cases=list(raw_cases),
         copies_per_case=int(raw["copies_per_case"]),
-        max_source_pages=int(raw["max_source_pages"]),
+        max_source_pages=max_source_pages,
         seed=int(raw["seed"]),
         output_root=str(raw["output_root"]),
         translate_categories=list(raw["translate_categories"]),

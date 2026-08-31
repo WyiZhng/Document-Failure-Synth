@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from src.synth.gt_builder import build_gt
-from src.synth.material import load_material
+from src.synth.material import IMAGE_CATEGORIES, load_material
 from src.synth.render import PlacedBlock
 
 
@@ -29,6 +29,48 @@ def _walk(nodes: list[dict]):
     for node in nodes:
         yield node
         yield from _walk(node.get("children") or [])
+
+
+def _walk_with_links(nodes: list[dict]):
+    for node in nodes:
+        yield node
+        yield from _walk_with_links(node.get("children") or [])
+        for target in node.get("link_to") or []:
+            yield from _walk_with_links([target])
+
+
+def _placed_for_material(material, cfg) -> list[PlacedBlock]:
+    placed: list[PlacedBlock] = []
+    for index, block in enumerate(material.blocks):
+        y1 = 40 + index * 30
+        y2 = y1 + 20
+        placed.append(
+            PlacedBlock(
+                block.id,
+                "zh",
+                block.category,
+                block.page,
+                (40, y1, 450, y2),
+                block.text,
+                index * 2,
+            )
+        )
+        if (
+            block.category in cfg.translate_categories
+            and block.category not in IMAGE_CATEGORIES
+        ):
+            placed.append(
+                PlacedBlock(
+                    block.id,
+                    "en",
+                    block.category,
+                    block.page,
+                    (500, y1, 960, y2),
+                    "English translation",
+                    index * 2 + 1,
+                )
+            )
+    return placed
 
 
 def _find_text_pair(tree: list[dict]) -> dict:
@@ -105,3 +147,52 @@ def test_origin_doc_id_format(material_fixture, cfg, tmp_path):
     assert origin["images_path"] == str((tmp_path / "images_path").resolve())
     assert origin["pdf_path"] == ""
     assert origin["reading_direction"] == "horizontal"
+
+
+def test_gt_preserves_virtual_link_target(tiny_case_with_link, cfg, tmp_path):
+    material = load_material(tiny_case_with_link, cfg, tmp_path / "assets")
+    build_gt(material, _placed_for_material(material, cfg), tmp_path / "out", cfg, seq=4)
+    tree = json.loads((tmp_path / "out" / "multi-page-final.json").read_text())["doc"]
+
+    anchors = [node for node in _walk_with_links(tree) if node.get("link")]
+    assert len(anchors) == 1
+    assert len(anchors[0]["link_to"]) == 1
+    target = anchors[0]["link_to"][0]
+    assert target["is_virtual"] is True
+    assert target["children"][0]["category"] == ["table"]
+    assert target["children"][0]["member"]
+    assert target["children"][0]["member"][0].startswith("p1-b")
+    target_member = target["children"][0]["member"][0]
+    assert target_member not in {
+        member for node in _walk(tree) for member in node.get("member") or []
+    }
+
+    label = json.loads((tmp_path / "out" / "label.json").read_text())
+    label_ids = {
+        f"p{page['page_index']}-b{block['block_id']}"
+        for page in label["pages"]
+        for block in page["blocks"]
+    }
+    tree_ids = {
+        member
+        for node in _walk_with_links(tree)
+        for member in node.get("member") or []
+    }
+    assert label_ids == tree_ids
+
+
+def test_gt_reuses_shared_target_output_id(tiny_case_with_shared_link, cfg, tmp_path):
+    material = load_material(tiny_case_with_shared_link, cfg, tmp_path / "assets")
+    build_gt(
+        material,
+        _placed_for_material(material, cfg),
+        tmp_path / "out",
+        cfg,
+        seq=5,
+    )
+    tree = json.loads((tmp_path / "out" / "multi-page-final.json").read_text())["doc"]
+    anchors = [node for node in _walk_with_links(tree) if node.get("link")]
+    assert len(anchors) == 2
+    roots = [anchor["link_to"][0] for anchor in anchors]
+    assert roots[0]["id"] == roots[1]["id"]
+    assert roots[0]["children"][0]["id"] == roots[1]["children"][0]["id"]

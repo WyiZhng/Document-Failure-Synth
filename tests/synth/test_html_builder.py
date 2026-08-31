@@ -36,3 +36,13 @@ def test_image_blocks_use_img(tiny_case_with_image, cfg, tmp_path):
     assert img["data-category"] == "image"
     assert img["data-lang"] == "zh"
     assert img.get("src")
+
+
+def test_shared_link_target_is_marked_once(tiny_case_with_shared_link, cfg, tmp_path):
+    from src.synth.material import load_material
+
+    material = load_material(tiny_case_with_shared_link, cfg, tmp_path / "assets")
+    soup = BeautifulSoup(build_source_html(material, cfg), "lxml")
+    ids = [element["data-node-id"] for element in soup.select("[data-node-id]")]
+    assert ids.count("p1-b1") == 1
+    assert ids.index("p0-b1") < ids.index("p1-b1")

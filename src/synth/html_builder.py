@@ -10,6 +10,7 @@ _BASE_STYLES = """
 body { font-family: 'Noto Serif CJK SC', 'Songti SC', serif; margin: 32px; }
 .src-page { margin-bottom: 48px; padding-bottom: 24px; border-bottom: 1px solid #ccc; }
 .block { margin: 8px 0; line-height: 1.6; }
+div.block { min-height: 1px; }
 .block[data-category="doc_title"] { font-size: 22px; font-weight: 700; text-align: center; }
 .block[data-category="paragraph_title"] { font-size: 18px; font-weight: 700; }
 .block[data-category="header"], .block[data-category="footer"] { color: #555; font-size: 12px; }

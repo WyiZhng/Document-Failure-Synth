@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from copy import deepcopy
 from pathlib import Path
 
 from src.synth.config import SynthConfig
@@ -56,32 +57,56 @@ def _rebuild_node(
     node: dict,
     mapped: dict[tuple[str, str], PlacedBlock],
     fake_counter: list[int],
+    nodes_by_id: dict[str, dict],
+    cache: dict[str, dict | None],
 ) -> dict | None:
+    source_id = str(node.get("id", ""))
+    if source_id in cache:
+        return cache[source_id]
+
+    source_node = nodes_by_id.get(source_id, node)
     rebuilt_children: list[dict] = []
-    for child in node.get("children") or []:
+    for child in source_node.get("children") or []:
         if not isinstance(child, dict):
             continue
-        rebuilt = _rebuild_node(child, mapped, fake_counter)
+        rebuilt = _rebuild_node(
+            child,
+            mapped,
+            fake_counter,
+            nodes_by_id,
+            cache,
+        )
         if rebuilt is not None:
             rebuilt_children.append(rebuilt)
 
-    if node.get("is_virtual"):
+    if source_node.get("is_virtual"):
         if not rebuilt_children:
+            cache[source_id] = None
             return None
         page = _first_page(rebuilt_children[0])
         fake_counter[0] += 1
-        return {
+        rebuilt = {
             "id": f"p{page}-fake{fake_counter[0]}",
             "page_index": [page],
             "member": [],
             "children": rebuilt_children,
-            "category": _virtual_category(node),
+            "category": _virtual_category(source_node),
             "bbox": [],
             "text": "",
             "is_virtual": True,
-            "link": False,
+            "link": bool(source_node.get("link")),
             "link_to": [],
         }
+        cache[source_id] = rebuilt
+        _rebuild_link_targets(
+            rebuilt,
+            source_node,
+            mapped,
+            fake_counter,
+            nodes_by_id,
+            cache,
+        )
+        return rebuilt
 
     members: list[str] = []
     pages: list[int] = []
@@ -89,7 +114,7 @@ def _rebuild_node(
     categories: list[str] = []
     texts: list[str] = []
 
-    for member_id in _as_list(node.get("member")):
+    for member_id in _as_list(source_node.get("member")):
         zh = mapped.get((str(member_id), "zh"))
         if zh is None:
             continue
@@ -110,21 +135,32 @@ def _rebuild_node(
         if rebuilt_children:
             page = _first_page(rebuilt_children[0])
             fake_counter[0] += 1
-            return {
+            rebuilt = {
                 "id": f"p{page}-fake{fake_counter[0]}",
                 "page_index": [page],
                 "member": [],
                 "children": rebuilt_children,
-                "category": _virtual_category(node),
+                "category": _virtual_category(source_node),
                 "bbox": [],
                 "text": "",
                 "is_virtual": True,
-                "link": False,
+                "link": bool(source_node.get("link")),
                 "link_to": [],
             }
+            cache[source_id] = rebuilt
+            _rebuild_link_targets(
+                rebuilt,
+                source_node,
+                mapped,
+                fake_counter,
+                nodes_by_id,
+                cache,
+            )
+            return rebuilt
+        cache[source_id] = None
         return None
 
-    return {
+    rebuilt = {
         "id": members[0],
         "page_index": pages,
         "member": members,
@@ -133,9 +169,54 @@ def _rebuild_node(
         "bbox": bboxes,
         "text": texts,
         "is_virtual": False,
-        "link": False,
+        "link": bool(source_node.get("link")),
         "link_to": [],
     }
+    cache[source_id] = rebuilt
+    _rebuild_link_targets(
+        rebuilt,
+        source_node,
+        mapped,
+        fake_counter,
+        nodes_by_id,
+        cache,
+    )
+    return rebuilt
+
+
+def _rebuild_link_targets(
+    rebuilt: dict,
+    source_node: dict,
+    mapped: dict[tuple[str, str], PlacedBlock],
+    fake_counter: list[int],
+    nodes_by_id: dict[str, dict],
+    cache: dict[str, dict | None],
+) -> None:
+    for target in _as_list(source_node.get("link_to")):
+        if not isinstance(target, dict) or not target.get("id"):
+            raise ValueError(
+                f"link_to on node {source_node.get('id', '?')!r} is missing target id"
+            )
+        target_id = str(target["id"])
+        target_node = nodes_by_id.get(target_id)
+        if target_node is None:
+            raise ValueError(
+                f"cannot rebuild link target {target_id!r} from node "
+                f"{source_node.get('id', '?')!r}"
+            )
+        rebuilt_target = _rebuild_node(
+            target_node,
+            mapped,
+            fake_counter,
+            nodes_by_id,
+            cache,
+        )
+        if rebuilt_target is None:
+            raise ValueError(
+                f"cannot rebuild empty link target {target_id!r} from node "
+                f"{source_node.get('id', '?')!r}"
+            )
+        rebuilt["link_to"].append(deepcopy(rebuilt_target))
 
 
 def _build_label(placed: list[PlacedBlock]) -> dict:
@@ -176,9 +257,16 @@ def build_gt(
 
     mapped = _assign_ids(placed, page_width=cfg.page.width)
     fake_counter = [0]
+    cache: dict[str, dict | None] = {}
     doc: list[dict] = []
     for root in material.tree:
-        rebuilt = _rebuild_node(root, mapped, fake_counter)
+        rebuilt = _rebuild_node(
+            root,
+            mapped,
+            fake_counter,
+            material.nodes_by_id,
+            cache,
+        )
         if rebuilt is not None:
             doc.append(rebuilt)
 

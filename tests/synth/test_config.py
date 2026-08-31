@@ -9,9 +9,20 @@ def test_load_default_config():
     assert cfg.page.width == 1000
     assert cfg.copies_per_case == 1
     assert "text" in cfg.translate_categories
-    assert cfg.source_cases == ["data/source/*"]
-    assert cfg.output_root == "data/output/bilingual_v2"
+    assert cfg.source_cases == ["task/source.txt"]
+    assert cfg.output_root == "data/output/0714_0827"
+    assert cfg.max_source_pages is None
     assert cfg.ocr.timeout == 300
+
+
+def test_load_config_accepts_explicit_page_limit(tmp_path: Path) -> None:
+    source = Path("src/synth/config/synth.yaml").read_text(encoding="utf-8")
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        source.replace("max_source_pages: null", "max_source_pages: 2"),
+        encoding="utf-8",
+    )
+    assert load_config(path).max_source_pages == 2
 
 
 def test_expand_source_cases_glob(tmp_path: Path) -> None:

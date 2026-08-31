@@ -108,7 +108,7 @@ def materialize_document(
     layout = column_layout or choose_column_layout(cfg.column_layouts, seed)
     logger.info("layout=%s seq=%s seed=%s", layout, seq, seed)
     placed = render_pages(rewritten, images_dir, cfg, column_layout=layout)
-    result = validate_doc(material.tree, placed, cfg)
+    result = validate_doc(material.tree, placed, cfg, material=material)
     if not result.ok:
         raise RuntimeError("; ".join(result.errors[:8]))
 

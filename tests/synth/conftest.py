@@ -65,6 +65,7 @@ def _write_case_dir(
     *,
     wrap_doc: bool = False,
     page_size: tuple[int, int] = (1000, 1000),
+    pages: tuple[int, ...] = (0,),
 ) -> None:
     case_dir.mkdir(parents=True, exist_ok=True)
     (case_dir / "origin.json").write_text(
@@ -86,7 +87,10 @@ def _write_case_dir(
         json.dumps(payload, ensure_ascii=False),
         encoding="utf-8",
     )
-    _write_page_image(case_dir / "images_path" / "raw-page-1.png", *page_size)
+    for page in pages:
+        _write_page_image(
+            case_dir / "images_path" / f"raw-page-{page + 1}.png", *page_size
+        )
 
 
 @pytest.fixture
@@ -103,9 +107,70 @@ def tiny_case_dir(tmp_path):
 @pytest.fixture
 def tiny_case_with_link(tmp_path):
     tree = _base_tree()
-    tree[0]["children"][0]["link_to"] = [{"id": "linked", "member": ["linked"]}]
-    _write_case_dir(tmp_path / "tiny_case_link", tree)
+    tree[0]["children"][0]["link"] = True
+    tree[0]["children"][0]["link_to"] = [_table_link_target()]
+    _write_case_dir(tmp_path / "tiny_case_link", tree, pages=(0, 1))
     return tmp_path / "tiny_case_link"
+
+
+def _table_link_target() -> dict:
+    return {
+        "id": "p1-fake1",
+        "page_index": [1],
+        "member": [],
+        "children": [
+            {
+                "id": "p1-b1",
+                "page_index": [1],
+                "member": ["p1-b1"],
+                "children": [],
+                "category": ["table"],
+                "bbox": [[100, 100, 400, 300]],
+                "text": [""],
+                "is_virtual": False,
+                "link": False,
+                "link_to": [],
+            }
+        ],
+        "category": ["table"],
+        "bbox": [],
+        "text": [""],
+        "is_virtual": True,
+        "link": False,
+        "link_to": [],
+    }
+
+
+@pytest.fixture
+def tiny_case_with_shared_link(tmp_path):
+    tree = _base_tree()
+    for node in tree[0]["children"][:2]:
+        node["link"] = True
+        node["link_to"] = [_table_link_target()]
+    _write_case_dir(tmp_path / "tiny_case_shared_link", tree, pages=(0, 1))
+    return tmp_path / "tiny_case_shared_link"
+
+
+@pytest.fixture
+def tiny_case_with_late_link(tmp_path):
+    tree = _base_tree()
+    tree[0]["children"][0]["link"] = True
+    tree[0]["children"][0]["link_to"] = [
+        {
+            "id": "p5-b1",
+            "page_index": [5],
+            "member": ["p5-b1"],
+            "children": [],
+            "category": ["text"],
+            "bbox": [[100, 100, 400, 150]],
+            "text": ["后页正文"],
+            "is_virtual": False,
+            "link": False,
+            "link_to": [],
+        }
+    ]
+    _write_case_dir(tmp_path / "tiny_case_late_link", tree, pages=(0, 5))
+    return tmp_path / "tiny_case_late_link"
 
 
 @pytest.fixture

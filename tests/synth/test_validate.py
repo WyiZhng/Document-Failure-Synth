@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 
 import pytest
 
+from src.synth.material import IMAGE_CATEGORIES, load_material
 from src.synth.render import PlacedBlock
 from src.synth.validate import validate_doc
 from tests.synth.conftest import _base_tree
@@ -26,6 +28,40 @@ def _valid_placed() -> list[PlacedBlock]:
     ]
 
 
+def _placed_for_material(material, cfg) -> list[PlacedBlock]:
+    placed: list[PlacedBlock] = []
+    for index, block in enumerate(material.blocks):
+        y1 = 40 + index * 30
+        y2 = y1 + 20
+        placed.append(
+            PlacedBlock(
+                block.id,
+                "zh",
+                block.category,
+                block.page,
+                (40, y1, 450, y2),
+                block.text,
+                index * 2,
+            )
+        )
+        if (
+            block.category in cfg.translate_categories
+            and block.category not in IMAGE_CATEGORIES
+        ):
+            placed.append(
+                PlacedBlock(
+                    block.id,
+                    "en",
+                    block.category,
+                    block.page,
+                    (500, y1, 960, y2),
+                    "English translation",
+                    index * 2 + 1,
+                )
+            )
+    return placed
+
+
 def _assert_fails_with_node_id(result, node_id: str) -> None:
     assert not result.ok
     assert any(node_id in err for err in result.errors)
@@ -40,6 +76,22 @@ def test_valid_placed_passes(cfg):
     assert result.stats["n_en"] == 2
     assert result.stats["en_cross_page"] == 0
     assert result.stats["n_errors"] == 0
+
+
+def test_link_stats_are_reported(tiny_case_with_shared_link, cfg, tmp_path):
+    material = load_material(tiny_case_with_shared_link, cfg, tmp_path / "assets")
+    result = validate_doc(
+        material.tree,
+        _placed_for_material(material, cfg),
+        cfg,
+        material=material,
+    )
+    assert result.ok
+    assert result.stats["link_count"] == 2
+    assert result.stats["unique_target_count"] == 1
+    assert result.stats["materialized_target_block_count"] == 1
+    assert result.stats["virtual_target_count"] == 1
+    assert result.stats["unresolved_link_count"] == 0
 
 
 @pytest.mark.parametrize(
@@ -221,6 +273,29 @@ def test_later_source_pages_are_ignored(cfg):
             "link_to": [],
         }
     )
-    result = validate_doc(tree, _valid_placed(), cfg)
+    result = validate_doc(tree, _valid_placed(), replace(cfg, max_source_pages=5))
     assert result.ok
     assert result.errors == []
+
+
+def test_later_source_pages_are_included_when_unlimited(cfg):
+    tree = _base_tree(
+        {
+            "id": "p5-b1",
+            "page_index": [5],
+            "member": ["p5-b1"],
+            "children": [],
+            "category": ["text"],
+            "bbox": [[100, 100, 400, 150]],
+            "text": ["后页正文"],
+            "is_virtual": False,
+            "link": False,
+            "link_to": [],
+        }
+    )
+    placed = _valid_placed() + [
+        PlacedBlock("p5-b1", "zh", "text", 5, _left_bbox(100, 150), "后页正文", 4),
+        PlacedBlock("p5-b1", "en", "text", 5, _right_bbox(100, 150), "Later body", 5),
+    ]
+    result = validate_doc(tree, placed, cfg)
+    assert result.ok

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections import Counter
 
 from src.synth.config import SynthConfig
-from src.synth.material import IMAGE_CATEGORIES, iter_source_blocks
+from src.synth.material import IMAGE_CATEGORIES, Material, iter_source_blocks
 from src.synth.render import PlacedBlock
 
 
@@ -39,16 +40,30 @@ def validate_doc(
     source_tree: list[dict],
     placed: list[PlacedBlock],
     cfg: SynthConfig,
+    *,
+    material: Material | None = None,
 ) -> ValidationResult:
     errors: list[str] = []
 
     zh_blocks = sorted((p for p in placed if p.lang == "zh"), key=lambda p: p.order)
     en_blocks = [p for p in placed if p.lang == "en"]
-    source_blocks = [
-        block
-        for block in iter_source_blocks(source_tree)
-        if int(block["page"]) < cfg.max_source_pages
-    ]
+    if material is None:
+        source_blocks = [
+            block
+            for block in iter_source_blocks(source_tree)
+            if cfg.max_source_pages is None
+            or int(block["page"]) < cfg.max_source_pages
+        ]
+    else:
+        source_blocks = [
+            {
+                "id": block.id,
+                "page": block.page,
+                "category": block.category,
+                "text": block.text,
+            }
+            for block in material.blocks
+        ]
     source_by_id = {b["id"]: b for b in source_blocks}
 
     zh_ids = [b.node_id for b in zh_blocks]
@@ -60,6 +75,10 @@ def validate_doc(
         errors.append(f"missing zh block: {node_id}")
     for node_id in sorted(zh_id_set - source_id_set):
         errors.append(f"extra zh block: {node_id}")
+
+    for node_id, count in sorted(Counter(zh_ids).items()):
+        if count > 1:
+            errors.append(f"duplicate zh block: {node_id}")
 
     if source_id_set == zh_id_set and zh_ids != source_ids:
         for idx, (zh, src) in enumerate(zip(zh_blocks, source_blocks)):
@@ -134,11 +153,70 @@ def validate_doc(
         if (en_list := en_by_id.get(zh.node_id, [])) and en_list[0].page > zh.page
     )
 
+    link_stats = {
+        "link_count": 0,
+        "unique_target_count": 0,
+        "materialized_target_block_count": 0,
+        "virtual_target_count": 0,
+        "unresolved_link_count": 0,
+    }
+    if material is not None:
+        relations = material.relations
+        source_member_ids = set(source_by_id)
+        target_ids = {relation.target_id for relation in relations}
+        link_stats.update(
+            {
+                "link_count": len(relations),
+                "unique_target_count": len(target_ids),
+                "virtual_target_count": sum(
+                    1
+                    for target_id in target_ids
+                    if material.nodes_by_id.get(target_id, {}).get("is_virtual")
+                ),
+            }
+        )
+
+        target_member_ids: dict[str, set[str]] = {}
+        for target_id in target_ids:
+            target = material.nodes_by_id.get(target_id)
+            if target is None:
+                target_member_ids[target_id] = set()
+                continue
+            target_member_ids[target_id] = {
+                str(block["id"])
+                for block in iter_source_blocks([target])
+            }
+        materialized_target_ids: set[str] = set()
+        for member_ids in target_member_ids.values():
+            materialized_target_ids.update(member_ids & source_member_ids)
+        link_stats["materialized_target_block_count"] = len(materialized_target_ids)
+
+        for relation in relations:
+            anchor = material.nodes_by_id.get(relation.anchor_id)
+            anchor_ids = (
+                {
+                    str(block["id"])
+                    for block in iter_source_blocks([anchor])
+                }
+                if anchor is not None
+                else set()
+            )
+            if not anchor_ids & source_member_ids:
+                continue
+
+            target_ids_for_relation = target_member_ids.get(relation.target_id, set())
+            if not target_ids_for_relation or not target_ids_for_relation <= source_member_ids:
+                errors.append(
+                    f"unresolved link: {relation.anchor_id} -> {relation.target_id}"
+                )
+                link_stats["unresolved_link_count"] += 1
+
     stats = {
         "n_zh": len(zh_blocks),
         "n_en": len(en_blocks),
         "en_cross_page": en_cross_page,
         "n_errors": len(errors),
+        **link_stats,
     }
 
     return ValidationResult(ok=not errors, errors=errors, stats=stats)
