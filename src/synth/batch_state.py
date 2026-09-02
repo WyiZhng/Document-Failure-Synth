@@ -6,10 +6,9 @@ import os
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-# The output contract now allows one semantic job to materialize multiple
-# layout variants.  Do not silently reuse a manifest created by the old
-# one-output-per-job runner.
-MANIFEST_VERSION = 2
+# The output contract now records an explicit variant and pagination profile.
+# Do not silently reuse a manifest created before that metadata existed.
+MANIFEST_VERSION = 3
 PHASE0_JSON_FILES = (
     "origin.json",
     "prelabel.json",
@@ -167,7 +166,9 @@ def find_recoverable_output(output_root: Path, seq: int) -> Path | None:
 def find_recoverable_outputs(
     output_root: Path,
     seq: int,
-    variant_count: int,
+    variant_count: int | None = None,
+    *,
+    variant_specs: Sequence[Mapping[str, Any]] | None = None,
 ) -> list[Path] | None:
     """Find every complete layout variant belonging to one semantic job.
 
@@ -178,21 +179,48 @@ def find_recoverable_outputs(
     """
 
     output_root = Path(output_root)
+    if variant_specs is not None:
+        expected_specs = [dict(spec) for spec in variant_specs]
+        variant_count = len(expected_specs)
+    else:
+        expected_specs = [{} for _ in range(int(variant_count or 0))]
+        variant_count = len(expected_specs)
     if not output_root.is_dir() or variant_count <= 0:
         return None
 
     first_sample_seq = (seq - 1) * variant_count + 1
     recovered: list[Path] = []
-    for sample_seq in range(first_sample_seq, first_sample_seq + variant_count):
+    for offset, spec in enumerate(expected_specs):
+        sample_seq = first_sample_seq + offset
         candidates = sorted(
             path
             for path in output_root.glob(f"synth_{sample_seq:03d}_*")
-            if path.is_dir() and output_is_complete(path, sample_seq)
+            if path.is_dir()
+            and output_is_complete(path, sample_seq)
+            and _output_matches_variant(path, spec)
         )
         if len(candidates) != 1:
             return None
         recovered.append(candidates[0])
     return recovered
+
+
+def _output_matches_variant(out_dir: Path, spec: Mapping[str, Any]) -> bool:
+    """Match explicit variant metadata without constraining legacy recovery."""
+
+    if not spec:
+        return True
+    try:
+        origin = _read_json(Path(out_dir) / "origin.json")
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return False
+    if not isinstance(origin, dict):
+        return False
+    for key in ("name", "column_layout", "pagination_mode", "synchronize_pairs"):
+        expected_key = "variant_name" if key == "name" else key
+        if expected_key in spec and origin.get(expected_key) != spec[key]:
+            return False
+    return True
 
 
 def _atomic_write(path: Path, content: str) -> None:

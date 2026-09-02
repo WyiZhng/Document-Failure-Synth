@@ -4,11 +4,13 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from src.synth import runner
-from src.synth.config import LlmConfig, OcrConfig, PageConfig, SynthConfig
+from src.synth.config import LlmConfig, OcrConfig, PageConfig, SynthConfig, VariantSpec
 from src.synth.translation_types import BlockPlan, TranslationBundle
 
 
-def test_generate_one_reuses_one_bundle_and_html_for_both_layouts(tmp_path: Path, monkeypatch):
+def test_generate_one_reuses_one_bundle_and_html_for_four_variants(
+    tmp_path: Path, monkeypatch
+):
     cfg = SynthConfig(
         source_cases=["case"],
         copies_per_case=1,
@@ -27,6 +29,12 @@ def test_generate_one_reuses_one_bundle_and_html_for_both_layouts(tmp_path: Path
         ocr=OcrConfig(url="", timeout=1),
         column_layouts=["zh-en", "en-zh"],
         max_workers=1,
+        variant_specs=[
+            VariantSpec("zh-en_no-cross", "zh-en", "no-cross"),
+            VariantSpec("zh-en_cross", "zh-en", "cross"),
+            VariantSpec("en-zh_no-cross", "en-zh", "no-cross"),
+            VariantSpec("en-zh_cross", "en-zh", "cross"),
+        ],
     )
     loaded = SimpleNamespace(
         doc_id="source-doc",
@@ -74,10 +82,21 @@ def test_generate_one_reuses_one_bundle_and_html_for_both_layouts(tmp_path: Path
 
     assert len(bundle_calls) == 1
     assert len(html_calls) == 1
-    assert len(materialize_calls) == 2
+    assert len(materialize_calls) == 4
     assert all(call[1] == "bilingual html" for call in materialize_calls)
     assert all(call[2] is bundle for call in materialize_calls)
-    assert [item["column_layout"] for item in result["variants"]] == ["zh-en", "en-zh"]
+    assert [item["column_layout"] for item in result["variants"]] == [
+        "zh-en", "zh-en", "en-zh", "en-zh"
+    ]
+    assert [item["variant_name"] for item in result["variants"]] == [
+        "zh-en_no-cross", "zh-en_cross", "en-zh_no-cross", "en-zh_cross"
+    ]
+    assert [call[3]["pagination_mode"] for call in materialize_calls] == [
+        "no-cross", "cross", "no-cross", "cross"
+    ]
+    assert [call[3]["synchronize_pairs"] for call in materialize_calls] == [
+        True, False, True, False
+    ]
 
 
 def test_translation_failure_metadata_is_sample_level():

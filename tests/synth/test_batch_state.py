@@ -17,7 +17,7 @@ from src.synth.batch_state import (
 )
 
 
-def _write_complete_output(path: Path, seq: int) -> None:
+def _write_complete_output(path: Path, seq: int, metadata: dict | None = None) -> None:
     images = path / "images_path"
     images.mkdir(parents=True, exist_ok=True)
     (images / "raw-page-1.png").write_bytes(b"png")
@@ -27,6 +27,7 @@ def _write_complete_output(path: Path, seq: int) -> None:
                 "doc_id": f"doc_{seq}",
                 "task_id": f"synth_task_{seq:03d}",
                 "images_path": str(images.resolve()),
+                **(metadata or {}),
             }
         ),
         encoding="utf-8",
@@ -127,6 +128,58 @@ def test_find_recoverable_outputs_requires_a_complete_variant_set(tmp_path: Path
 
     (second / "label.json").unlink()
     assert find_recoverable_outputs(output_root, seq=1, variant_count=2) is None
+
+
+def test_find_recoverable_outputs_matches_explicit_variant_metadata(tmp_path: Path):
+    output_root = tmp_path / "out"
+    specs = [
+        {
+            "name": "zh-en_no-cross",
+            "column_layout": "zh-en",
+            "pagination_mode": "no-cross",
+            "synchronize_pairs": True,
+        },
+        {
+            "name": "zh-en_cross",
+            "column_layout": "zh-en",
+            "pagination_mode": "cross",
+            "synchronize_pairs": False,
+        },
+    ]
+    first = output_root / "synth_001_doc_zh-en_no-cross"
+    second = output_root / "synth_002_doc_zh-en_cross"
+    _write_complete_output(
+        first,
+        seq=1,
+        metadata={
+            "sample_seq": 1,
+            "variant_name": specs[0]["name"],
+            "column_layout": specs[0]["column_layout"],
+            "pagination_mode": specs[0]["pagination_mode"],
+            "synchronize_pairs": specs[0]["synchronize_pairs"],
+        },
+    )
+    _write_complete_output(
+        second,
+        seq=2,
+        metadata={
+            "sample_seq": 2,
+            "variant_name": specs[1]["name"],
+            "column_layout": specs[1]["column_layout"],
+            "pagination_mode": specs[1]["pagination_mode"],
+            "synchronize_pairs": specs[1]["synchronize_pairs"],
+        },
+    )
+    assert find_recoverable_outputs(output_root, 1, variant_specs=specs) == [
+        first,
+        second,
+    ]
+
+    origin_path = second / "origin.json"
+    origin = json.loads(origin_path.read_text(encoding="utf-8"))
+    origin["pagination_mode"] = "no-cross"
+    origin_path.write_text(json.dumps(origin), encoding="utf-8")
+    assert find_recoverable_outputs(output_root, 1, variant_specs=specs) is None
 
 
 def test_atomic_writes_leave_target_readable_without_temp_files(tmp_path: Path):

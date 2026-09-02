@@ -83,6 +83,23 @@ def test_render_bilingual_columns_paginate_independently(cfg, tmp_path):
 
 
 @pytest.mark.render
+def test_render_synchronized_pairs_keep_bilingual_page_boundaries(cfg, tmp_path):
+    html = make_bilingual_test_html()
+    placed = render_pages(
+        html,
+        tmp_path,
+        cfg,
+        column_layout="zh-en",
+        synchronize_pairs=True,
+    )
+    pages_by_node: dict[str, set[int]] = {}
+    for block in placed:
+        pages_by_node.setdefault(block.node_id, set()).add(block.page)
+    assert pages_by_node
+    assert all(len(pages) == 1 for pages in pages_by_node.values())
+
+
+@pytest.mark.render
 def test_render_text_block_splits_across_pages(cfg, tmp_path):
     html, english = make_long_bilingual_test_html()
     placed = render_pages(html, tmp_path, cfg)

@@ -24,7 +24,13 @@ from src.synth.batch_state import (
     write_json_atomic,
     write_text_atomic,
 )
-from src.synth.config import SynthConfig, choose_column_layout, expand_source_cases, load_config
+from src.synth.config import (
+    SynthConfig,
+    VariantSpec,
+    choose_column_layout,
+    expand_source_cases,
+    load_config,
+)
 from src.synth.gt_builder import build_gt
 from src.synth.html_builder import build_bilingual_html, build_source_html
 from src.synth.material import load_material
@@ -243,6 +249,9 @@ _REPORT_FIELDS = (
     "variant_count",
     "outputs",
     "rewrite_seq",
+    "variant_name",
+    "pagination_mode",
+    "synchronize_pairs",
     "error",
 )
 
@@ -275,6 +284,7 @@ def _semantic_fingerprint_payload(
         "translate_categories": list(cfg.translate_categories),
         "column_layouts": list(cfg.column_layouts),
         "synchronize_bilingual_pairs": cfg.synchronize_bilingual_pairs,
+        "variants": [spec.to_dict() for spec in cfg.get_variant_specs()],
         "page": {
             "width": cfg.page.width,
             "height": cfg.page.height,
@@ -380,7 +390,14 @@ def _recovered_event(
                 "stats", previous.get("stats") or {}
             ),
         }
-        for key in ("sample_seq", "column_layout", "rewrite_seq"):
+        for key in (
+            "sample_seq",
+            "column_layout",
+            "rewrite_seq",
+            "variant_name",
+            "pagination_mode",
+            "synchronize_pairs",
+        ):
             if key in origin:
                 output[key] = origin[key]
         outputs.append(output)
@@ -440,6 +457,49 @@ def _output_is_final_compatible(out_dir: Path, cfg: SynthConfig) -> bool:
         return False
 
 
+def _variant_for_sample(
+    sample_seq: int,
+    job: JobSpec,
+    specs: list[VariantSpec],
+) -> VariantSpec | None:
+    first_sample_seq = (job.seq - 1) * len(specs) + 1
+    offset = sample_seq - first_sample_seq
+    if 0 <= offset < len(specs):
+        return specs[offset]
+    return None
+
+
+def _output_matches_config_variant(
+    out_dir: Path,
+    sample_seq: int,
+    job: JobSpec,
+    cfg: SynthConfig,
+) -> bool:
+    """Require explicit output metadata for configs using named variants."""
+
+    # Configs constructed by older callers have no explicit ``variants``
+    # field. Their two-layout recovery behavior remains intentionally loose.
+    if cfg.variant_specs is None:
+        return True
+    spec = _variant_for_sample(sample_seq, job, cfg.get_variant_specs())
+    if spec is None:
+        return False
+    try:
+        origin = json.loads((Path(out_dir) / "origin.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return False
+    return isinstance(origin, dict) and all(
+        origin.get(key) == expected
+        for key, expected in {
+            "variant_name": spec.name,
+            "column_layout": spec.column_layout,
+            "pagination_mode": spec.pagination_mode,
+            "synchronize_pairs": spec.synchronize_pairs,
+            "sample_seq": sample_seq,
+        }.items()
+    )
+
+
 def _event_outputs_complete(
     event: dict[str, Any], job: JobSpec, cfg: SynthConfig | None = None
 ) -> bool:
@@ -466,6 +526,10 @@ def _event_outputs_complete(
             return False
         if not output_is_complete(Path(raw_path), sample_seq):
             return False
+        if cfg is not None and not _output_matches_config_variant(
+            Path(raw_path), sample_seq, job, cfg
+        ):
+            return False
         if cfg is not None and not _output_is_final_compatible(Path(raw_path), cfg):
             return False
     return True
@@ -490,6 +554,7 @@ def _write_batch_checkpoint(
     latest: dict[str, dict[str, Any]],
     started: float,
     variants_per_job: int = 1,
+    variant_specs: list[dict[str, Any]] | None = None,
 ) -> dict:
     records = _terminal_records(jobs, latest)
     records.sort(key=lambda record: int(record["seq"]))
@@ -516,6 +581,7 @@ def _write_batch_checkpoint(
         "n_planned": len(jobs),
         "n_samples_ok": n_samples_ok,
         "n_samples_planned": len(jobs) * variants_per_job,
+        "variants": variant_specs or [],
         "elapsed_sec": round(time.time() - started, 2),
         "records": records,
     }
@@ -605,16 +671,34 @@ def materialize_document(
     cleanup_assets: bool = True,
     origin_metadata: dict[str, Any] | None = None,
     plans: TranslationBundle | None = None,
+    synchronize_pairs: bool | None = None,
+    variant_name: str | None = None,
+    pagination_mode: str | None = None,
 ) -> dict:
     rewritten = _relink_images(rewritten, material)
     images_dir = out_dir / "images_path"
     if images_dir.exists():
         shutil.rmtree(images_dir)
     layout = column_layout or choose_column_layout(cfg.column_layouts, seed)
-    logger.info("layout=%s seq=%s seed=%s", layout, seq, seed)
+    effective_sync = (
+        getattr(cfg, "synchronize_bilingual_pairs", False)
+        if synchronize_pairs is None
+        else bool(synchronize_pairs)
+    )
+    effective_mode = pagination_mode or ("no-cross" if effective_sync else "cross")
+    logger.info(
+        "layout=%s pagination_mode=%s synchronize_pairs=%s seq=%s seed=%s",
+        layout,
+        effective_mode,
+        effective_sync,
+        seq,
+        seed,
+    )
     render_kwargs: dict[str, Any] = {"column_layout": layout}
-    if getattr(cfg, "synchronize_bilingual_pairs", False):
-        render_kwargs["synchronize_pairs"] = True
+    if synchronize_pairs is not None or getattr(
+        cfg, "synchronize_bilingual_pairs", False
+    ):
+        render_kwargs["synchronize_pairs"] = effective_sync
     placed = render_pages(rewritten, images_dir, cfg, **render_kwargs)
     result = validate_doc(
         material.tree,
@@ -702,12 +786,19 @@ def materialize_document(
             }
         )
     stats["column_layout"] = layout
+    stats["pagination_mode"] = effective_mode
+    stats["synchronize_pairs"] = effective_sync
+    if variant_name:
+        stats["variant_name"] = variant_name
     return {
         "path": str(out_dir.resolve()),
         "doc_id": material.doc_id,
         "seed": seed,
         "sample_seq": seq,
         "column_layout": layout,
+        "variant_name": variant_name,
+        "pagination_mode": effective_mode,
+        "synchronize_pairs": effective_sync,
         "stats": stats,
     }
 
@@ -769,11 +860,12 @@ def generate_one(
             rewritten = rewrite_html(html, cfg, seed=seed)
             logger.info("legacy rewrite done seq=%s", seq)
         variants: list[dict[str, Any]] = []
-        variant_count = len(cfg.column_layouts)
-        for variant_index, layout in enumerate(cfg.column_layouts):
+        variant_specs = cfg.get_variant_specs()
+        variant_count = len(variant_specs)
+        for variant_index, spec in enumerate(variant_specs):
             sample_seq = (seq - 1) * variant_count + variant_index + 1
             out_dir = output_root / (
-                f"synth_{sample_seq:03d}_{material.doc_id}_{layout}"
+                f"synth_{sample_seq:03d}_{material.doc_id}_{spec.name}"
             )
             if out_dir.exists():
                 shutil.rmtree(out_dir)
@@ -781,13 +873,19 @@ def generate_one(
             output_dirs.append(out_dir)
             (out_dir / "rewritten.html").write_text(rewritten, encoding="utf-8")
             materialize_kwargs = {
-                "column_layout": layout,
+                "column_layout": spec.column_layout,
+                "synchronize_pairs": spec.synchronize_pairs,
+                "variant_name": spec.name,
+                "pagination_mode": spec.pagination_mode,
                 "cleanup_assets": False,
                 "origin_metadata": {
                     "source_doc_id": material.doc_id,
                     "rewrite_seq": seq,
                     "sample_seq": sample_seq,
-                    "column_layout": layout,
+                    "variant_name": spec.name,
+                    "column_layout": spec.column_layout,
+                    "pagination_mode": spec.pagination_mode,
+                    "synchronize_pairs": spec.synchronize_pairs,
                     "seed": seed,
                 },
             }
@@ -804,6 +902,9 @@ def generate_one(
                 **materialize_kwargs,
             )
             variant["rewrite_seq"] = seq
+            variant.setdefault("variant_name", spec.name)
+            variant.setdefault("pagination_mode", spec.pagination_mode)
+            variant.setdefault("synchronize_pairs", spec.synchronize_pairs)
             variants.append(variant)
         return {"variants": variants, "seed": seed, "rewrite_seq": seq}
     except Exception:
@@ -832,11 +933,13 @@ def run_batch(
     started = time.time()
     case_dirs = expand_source_cases(cfg.source_cases, workspace)
     jobs = _build_jobs(case_dirs, cfg.copies_per_case, cfg.seed)
+    variant_specs = cfg.get_variant_specs()
+    variant_payload = [spec.to_dict() for spec in variant_specs]
     logger.info(
-        "batch cases=%s copies_per_case=%s layouts=%s",
+        "batch cases=%s copies_per_case=%s variants=%s",
         [str(path) for path in case_dirs],
         cfg.copies_per_case,
-        cfg.column_layouts,
+        variant_payload,
     )
 
     manifest_path = output_root / "batch_manifest.json"
@@ -862,7 +965,12 @@ def run_batch(
             recovered = find_recoverable_outputs(
                 output_root,
                 job.seq,
-                len(cfg.column_layouts),
+                variant_specs=variant_payload
+                if cfg.variant_specs is not None
+                else None,
+                variant_count=None
+                if cfg.variant_specs is not None
+                else len(variant_specs),
             )
             if recovered and all(
                 _output_is_final_compatible(path, cfg) for path in recovered
@@ -879,7 +987,8 @@ def run_batch(
             jobs,
             latest,
             started,
-            variants_per_job=len(cfg.column_layouts),
+            variants_per_job=len(variant_specs),
+            variant_specs=variant_payload,
         )
 
     # Remove stale successful records from the checkpoint before any pending
@@ -895,7 +1004,8 @@ def run_batch(
         jobs,
         latest,
         started,
-        variants_per_job=len(cfg.column_layouts),
+        variants_per_job=len(variant_specs),
+        variant_specs=variant_payload,
     )
 
     executor = ThreadPoolExecutor(
@@ -938,7 +1048,8 @@ def run_batch(
                 jobs,
                 latest,
                 started,
-                variants_per_job=len(cfg.column_layouts),
+                variants_per_job=len(variant_specs),
+                variant_specs=variant_payload,
             )
     except KeyboardInterrupt:
         executor.shutdown(wait=False, cancel_futures=True)
@@ -951,7 +1062,8 @@ def run_batch(
         jobs,
         latest,
         started,
-        variants_per_job=len(cfg.column_layouts),
+        variants_per_job=len(variant_specs),
+        variant_specs=variant_payload,
     )
 
 

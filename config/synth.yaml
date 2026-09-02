@@ -5,6 +5,19 @@ max_workers: 4
 max_source_pages: null
 seed: 42
 column_layouts: [zh-en, en-zh]
+variants:
+  - name: zh-en_no-cross
+    column_layout: zh-en
+    pagination_mode: no-cross
+  - name: zh-en_cross
+    column_layout: zh-en
+    pagination_mode: cross
+  - name: en-zh_no-cross
+    column_layout: en-zh
+    pagination_mode: no-cross
+  - name: en-zh_cross
+    column_layout: en-zh
+    pagination_mode: cross
 output_root: data/output
 translate_categories: [text, paragraph_title, doc_title, table, table_title, form, form_title, footer, footnote, header, reference]
 page:

@@ -6,6 +6,19 @@ max_source_pages: null         # null 表示使用源文档全部页面
 seed: 42
 column_layouts: [zh-en, en-zh]  # 每个改写版本都生成两种布局:左中右英 / 左英右中
 synchronize_bilingual_pairs: true  # 双语块成对换页，降低 Trainer 页面投影冲突
+variants:
+  - name: zh-en_no-cross
+    column_layout: zh-en
+    pagination_mode: no-cross
+  - name: zh-en_cross
+    column_layout: zh-en
+    pagination_mode: cross
+  - name: en-zh_no-cross
+    column_layout: en-zh
+    pagination_mode: no-cross
+  - name: en-zh_cross
+    column_layout: en-zh
+    pagination_mode: cross
 output_root: data/output/0714_0827
 translate_categories: [text, paragraph_title, doc_title, table, table_title, form, form_title, footer, footnote, header, reference]
 page:

@@ -236,7 +236,9 @@ def test_parallel_failure_does_not_cancel_other_jobs(tmp_path: Path):
     } == {2, 3}
 
 
-def _write_complete_output(path: Path, seq: int) -> None:
+def _write_complete_output(
+    path: Path, seq: int, metadata: dict | None = None
+) -> None:
     images = path / "images_path"
     images.mkdir(parents=True, exist_ok=True)
     (images / "raw-page-1.png").write_bytes(b"png")
@@ -246,6 +248,7 @@ def _write_complete_output(path: Path, seq: int) -> None:
                 "doc_id": f"doc_{seq}",
                 "task_id": f"synth_task_{seq:03d}",
                 "images_path": str(images.resolve()),
+                **(metadata or {}),
             }
         ),
         encoding="utf-8",
@@ -410,6 +413,69 @@ def test_batch_lists_all_layout_variants(tmp_path: Path):
     assert listed == [
         str(tmp_path / "out" / "sample_1_zh-en"),
         str(tmp_path / "out" / "sample_1_en-zh"),
+    ]
+
+
+def test_batch_records_and_resumes_explicit_pagination_variants(tmp_path: Path):
+    from dataclasses import replace
+    from src.synth.config import VariantSpec
+
+    specs = [
+        VariantSpec("zh-en_no-cross", "zh-en", "no-cross"),
+        VariantSpec("zh-en_cross", "zh-en", "cross"),
+        VariantSpec("en-zh_no-cross", "en-zh", "no-cross"),
+        VariantSpec("en-zh_cross", "en-zh", "cross"),
+    ]
+    cfg = replace(_cfg(tmp_path), variant_specs=specs)
+    calls: list[int] = []
+
+    def generate(case_dir, seq, seed, cfg, output_root):
+        del case_dir
+        calls.append(seq)
+        outputs = []
+        for index, spec in enumerate(cfg.get_variant_specs()):
+            sample_seq = (seq - 1) * len(specs) + index + 1
+            path = output_root / f"synth_{sample_seq:03d}_doc_{spec.name}"
+            _write_complete_output(
+                path,
+                sample_seq,
+                metadata={
+                    "sample_seq": sample_seq,
+                    "variant_name": spec.name,
+                    "column_layout": spec.column_layout,
+                    "pagination_mode": spec.pagination_mode,
+                    "synchronize_pairs": spec.synchronize_pairs,
+                },
+            )
+            outputs.append(
+                {
+                    "path": str(path),
+                    "doc_id": "doc",
+                    "seed": seed,
+                    "sample_seq": sample_seq,
+                    "variant_name": spec.name,
+                    "column_layout": spec.column_layout,
+                    "pagination_mode": spec.pagination_mode,
+                    "synchronize_pairs": spec.synchronize_pairs,
+                    "stats": {},
+                }
+            )
+        return {"variants": outputs, "seed": seed, "rewrite_seq": seq}
+
+    first = runner.run_batch(cfg, workspace=tmp_path, generate_fn=generate)
+    second = runner.run_batch(cfg, workspace=tmp_path, generate_fn=generate)
+
+    assert calls == [1]
+    assert first["n_samples_ok"] == second["n_samples_ok"] == 4
+    assert second["n_samples_planned"] == 4
+    assert [item["name"] for item in second["variants"]] == [
+        "zh-en_no-cross", "zh-en_cross", "en-zh_no-cross", "en-zh_cross"
+    ]
+    manifest = json.loads(
+        (tmp_path / "out" / "batch_manifest.json").read_text(encoding="utf-8")
+    )
+    assert [item["name"] for item in manifest["fingerprint_payload"]["variants"]] == [
+        "zh-en_no-cross", "zh-en_cross", "en-zh_no-cross", "en-zh_cross"
     ]
 
 
@@ -769,13 +835,14 @@ def test_resume_rejects_changed_semantic_config(tmp_path: Path):
 
 
 @pytest.mark.render
-def test_two_real_generation_jobs_do_not_share_render_output(
+def test_real_generation_materializes_all_four_variants(
     tmp_path: Path,
     tiny_case_dir: Path,
     monkeypatch,
 ):
     from bs4 import BeautifulSoup
     from dataclasses import replace
+    from src.synth.config import VariantSpec
 
     def fake_rewrite(html, cfg, seed=None):
         del seed
@@ -807,17 +874,23 @@ def test_two_real_generation_jobs_do_not_share_render_output(
     monkeypatch.setattr(runner, "rewrite_html", fake_rewrite)
     monkeypatch.setattr(runner, "build_prelabel", fake_prelabel)
     cfg = replace(
-        _cfg(tmp_path, copies=2, max_workers=2),
+        _cfg(tmp_path, copies=1, max_workers=2),
         source_cases=[str(tiny_case_dir)],
         ocr=OcrConfig(url="http://fake-ocr", timeout=1),
+        variant_specs=[
+            VariantSpec("zh-en_no-cross", "zh-en", "no-cross"),
+            VariantSpec("zh-en_cross", "zh-en", "cross"),
+            VariantSpec("en-zh_no-cross", "en-zh", "no-cross"),
+            VariantSpec("en-zh_cross", "en-zh", "cross"),
+        ],
     )
     runner.ensure_runtime_env(Path(__file__).resolve().parents[2])
 
     report = runner.run_batch(cfg, workspace=tmp_path)
 
-    assert report["n_ok"] == 2
+    assert report["n_ok"] == 1
     assert report["n_samples_ok"] == 4
-    assert [record["seq"] for record in report["records"]] == [1, 2]
+    assert [record["seq"] for record in report["records"]] == [1]
     output_paths = [
         Path(output["path"])
         for record in report["records"]
@@ -844,3 +917,6 @@ def test_two_real_generation_jobs_do_not_share_render_output(
             f"synth_task_{output_record['sample_seq']:03d}"
         )
         assert origin["column_layout"] == output_record["column_layout"]
+        assert origin["variant_name"] == output_record["variant_name"]
+        assert origin["pagination_mode"] == output_record["pagination_mode"]
+        assert origin["synchronize_pairs"] == output_record["synchronize_pairs"]
