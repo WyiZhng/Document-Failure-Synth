@@ -1,0 +1,23 @@
+source_cases:
+  - data/source/*
+copies_per_case: 1
+max_workers: 4
+max_source_pages: null
+seed: 42
+column_layouts: [zh-en, en-zh]
+output_root: data/output
+translate_categories: [text, paragraph_title, doc_title, table, table_title, form, form_title, footer, footnote, header, reference]
+page:
+  width: 1000
+  height: 1414
+  margin: 40
+  column_gap: 24
+llm:
+  model_env: SYNTH_LLM_MODEL
+  base_url_env: OPENAI_BASE_URL
+  api_key_env: OPENAI_API_KEY
+  temperature: 0.7
+  max_retries: 1
+ocr:
+  url: ""
+  timeout: 300
