@@ -5,6 +5,7 @@ max_workers: 4                 # 同时处理的语义改写 job 数
 max_source_pages: null         # null 表示使用源文档全部页面
 seed: 42
 column_layouts: [zh-en, en-zh]  # 每个改写版本都生成两种布局:左中右英 / 左英右中
+synchronize_bilingual_pairs: true  # 双语块成对换页，降低 Trainer 页面投影冲突
 output_root: data/output/0714_0827
 translate_categories: [text, paragraph_title, doc_title, table, table_title, form, form_title, footer, footnote, header, reference]
 page:
@@ -18,6 +19,7 @@ llm:
   api_key_env: OPENAI_API_KEY
   temperature: 0.7
   max_retries: 1
+  batch_max_chars: 12000
 ocr:
   url: ""
   timeout: 300

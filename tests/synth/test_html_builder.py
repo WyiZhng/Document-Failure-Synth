@@ -1,6 +1,9 @@
 from bs4 import BeautifulSoup
+from dataclasses import replace
 
-from src.synth.html_builder import build_source_html
+from src.synth.html_builder import build_bilingual_html, build_source_html
+from src.synth.material import SourceBlock
+from src.synth.translation_types import BlockPlan, TranslationBundle
 
 
 def test_every_block_marked(material_fixture, cfg):
@@ -46,3 +49,91 @@ def test_shared_link_target_is_marked_once(tiny_case_with_shared_link, cfg, tmp_
     ids = [element["data-node-id"] for element in soup.select("[data-node-id]")]
     assert ids.count("p1-b1") == 1
     assert ids.index("p0-b1") < ids.index("p1-b1")
+
+
+def test_bilingual_html_uses_node_plan_and_keeps_source_once(material_fixture, cfg):
+    bundle = TranslationBundle(
+        plans={
+            "p0-b1": BlockPlan(
+                "p0-b1", "paragraph_title", "标题一", "zh", "en", "translate", "Title One"
+            ),
+            "p0-b2": BlockPlan(
+                "p0-b2", "text", "正文内容", "zh", "en", "copy", "正文内容"
+            ),
+        },
+        dropped={},
+        warnings=[],
+    )
+
+    soup = BeautifulSoup(build_bilingual_html(material_fixture, bundle, cfg), "lxml")
+
+    assert [el.get("data-lang") for el in soup.select('[data-node-id="p0-b1"]')] == [
+        "zh",
+        "en",
+    ]
+    assert [el.get_text(strip=True) for el in soup.select('[data-node-id="p0-b2"]')] == [
+        "正文内容",
+        "正文内容",
+    ]
+    assert soup.select_one('[data-node-id="p0-b1"][data-lang="zh"]').get_text(
+        strip=True
+    ) == "标题一"
+
+
+def test_bilingual_html_supports_english_source_and_dropped_target(material_fixture, cfg):
+    material = replace(
+        material_fixture,
+        blocks=[
+            SourceBlock("en", 0, "text", "English source", None),
+            SourceBlock("dropped", 0, "text", "中文源文", None),
+        ],
+    )
+    bundle = TranslationBundle(
+        plans={
+            "en": BlockPlan("en", "text", "English source", "en", "zh", "translate", "中文源文"),
+            "dropped": BlockPlan("dropped", "text", "中文源文", "zh", "en", "translate", None),
+        },
+        dropped={"dropped": "translation failed"},
+        warnings=[],
+    )
+
+    soup = BeautifulSoup(build_bilingual_html(material, bundle, cfg), "lxml")
+
+    assert [el.get("data-lang") for el in soup.select('[data-node-id="en"]')] == [
+        "en",
+        "zh",
+    ]
+    assert [el.get_text(strip=True) for el in soup.select('[data-node-id="dropped"]')] == [
+        "中文源文"
+    ]
+
+
+def test_bilingual_html_materializes_empty_relation_plan_as_invisible_block(
+    material_fixture, cfg
+):
+    material = replace(
+        material_fixture,
+        blocks=[SourceBlock("empty-reference", 4, "reference", "", None)],
+    )
+    bundle = TranslationBundle(
+        plans={
+            "empty-reference": BlockPlan(
+                "empty-reference",
+                "reference",
+                "",
+                "zh",
+                None,
+                "source_only",
+                None,
+            )
+        },
+        dropped={},
+        warnings=[],
+    )
+
+    soup = BeautifulSoup(build_bilingual_html(material, bundle, cfg), "lxml")
+    element = soup.select_one('[data-node-id="empty-reference"]')
+
+    assert element is not None
+    assert element.get("data-relation-only") == "true"
+    assert element.get("data-lang") == "zh"

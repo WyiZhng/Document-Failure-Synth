@@ -15,6 +15,8 @@ def test_load_default_config():
     assert cfg.max_source_pages is None
     assert cfg.ocr.timeout == 300
     assert cfg.column_layouts == ["zh-en", "en-zh"]
+    assert cfg.llm.batch_max_chars == 12000
+    assert cfg.synchronize_bilingual_pairs is True
 
 
 def test_load_config_rejects_non_positive_max_workers(tmp_path: Path) -> None:
@@ -22,6 +24,20 @@ def test_load_config_rejects_non_positive_max_workers(tmp_path: Path) -> None:
     path = tmp_path / "config.yaml"
     path.write_text(source.replace("max_workers: 4", "max_workers: 0"), encoding="utf-8")
     with pytest.raises(ValueError, match="max_workers"):
+        load_config(path)
+
+
+@pytest.mark.parametrize("value", [0, -1])
+def test_load_config_rejects_non_positive_batch_max_chars(
+    tmp_path: Path, value: int
+) -> None:
+    source = Path("src/synth/config/synth.yaml").read_text(encoding="utf-8")
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        source.replace("batch_max_chars: 12000", f"batch_max_chars: {value}"),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="batch_max_chars"):
         load_config(path)
 
 
@@ -33,6 +49,17 @@ def test_load_config_accepts_explicit_page_limit(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert load_config(path).max_source_pages == 2
+
+
+def test_load_config_can_disable_synchronized_pagination(tmp_path: Path) -> None:
+    source = Path("src/synth/config/synth.yaml").read_text(encoding="utf-8")
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        source.replace("synchronize_bilingual_pairs: true", "synchronize_bilingual_pairs: false"),
+        encoding="utf-8",
+    )
+
+    assert load_config(path).synchronize_bilingual_pairs is False
 
 
 def test_expand_source_cases_glob(tmp_path: Path) -> None:

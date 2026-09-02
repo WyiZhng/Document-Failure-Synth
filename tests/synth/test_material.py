@@ -79,7 +79,7 @@ def test_missing_link_target_is_rejected(tmp_path, cfg):
         load_material(case_dir, cfg, tmp_path / "assets")
 
 
-def test_empty_virtual_link_target_is_rejected(tmp_path, cfg):
+def test_empty_virtual_link_target_is_retained_as_relation_only(tmp_path, cfg):
     tree = _base_tree()
     tree[0]["children"][0]["link"] = True
     target = _table_link_target()
@@ -88,8 +88,10 @@ def test_empty_virtual_link_target_is_rejected(tmp_path, cfg):
     case_dir = tmp_path / "empty_virtual_target"
     _write_case_dir(case_dir, tree)
 
-    with pytest.raises(ValueError, match="p1-fake1"):
-        load_material(case_dir, cfg, tmp_path / "assets")
+    material = load_material(case_dir, cfg, tmp_path / "assets")
+    assert material.relations == [LinkRelation("p0-b1", "p1-fake1")]
+    assert material.nodes_by_id["p1-fake1"]["children"] == []
+    assert "p1-fake1" not in [block.id for block in material.blocks]
 
 
 def test_conflicting_link_target_layout_is_rejected(tmp_path, cfg):

@@ -7,6 +7,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 import sys
 import time
@@ -25,17 +26,20 @@ from src.synth.batch_state import (
 )
 from src.synth.config import SynthConfig, choose_column_layout, expand_source_cases, load_config
 from src.synth.gt_builder import build_gt
-from src.synth.html_builder import build_source_html
+from src.synth.html_builder import build_bilingual_html, build_source_html
 from src.synth.material import load_material
 from src.synth.ocr_prelabel import OcrSettings, build_prelabel
 from src.synth.render import render_pages
-from src.synth.rewrite import rewrite_html
-from src.synth.validate import validate_doc, validate_page_projection
+from src.synth.rewrite import rewrite_html, translate_material
+from src.synth.translation_types import TranslationBundle
+from src.synth.validate import validate_doc, validate_final_case
 from src.synth.visualize import draw_overlays
 
 logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3
+_ORIGINAL_REWRITE_HTML = rewrite_html
+_RAW_PAGE_RE = re.compile(r"^raw-page-(\d+)\.png$")
 
 
 @dataclass(frozen=True)
@@ -270,6 +274,7 @@ def _semantic_fingerprint_payload(
         "seed": cfg.seed,
         "translate_categories": list(cfg.translate_categories),
         "column_layouts": list(cfg.column_layouts),
+        "synchronize_bilingual_pairs": cfg.synchronize_bilingual_pairs,
         "page": {
             "width": cfg.page.width,
             "height": cfg.page.height,
@@ -281,6 +286,7 @@ def _semantic_fingerprint_payload(
             "base_url": os.environ.get(cfg.llm.base_url_env, ""),
             "temperature": cfg.llm.temperature,
             "max_retries": cfg.llm.max_retries,
+            "batch_max_chars": cfg.llm.batch_max_chars,
         },
         "ocr": {
             "env_url": os.environ.get("PADDLE_OCR_API_URL", "").strip().rstrip("/"),
@@ -404,7 +410,39 @@ def _recovered_event(
     return event
 
 
-def _event_outputs_complete(event: dict[str, Any], job: JobSpec) -> bool:
+def _output_is_final_compatible(out_dir: Path, cfg: SynthConfig) -> bool:
+    """Reject a phase-0-complete directory that predates final validation.
+
+    Library callers can provide their own lightweight output objects, so the
+    additional check is applied to directories carrying the synthesizer's
+    ``rewritten.html`` marker. Generated cases always carry that marker.
+    """
+
+    out_dir = Path(out_dir)
+    if not (out_dir / "rewritten.html").is_file():
+        return True
+    try:
+        origin = json.loads((out_dir / "origin.json").read_text(encoding="utf-8"))
+        images_dir = Path(str(origin["images_path"]))
+        if not images_dir.is_absolute():
+            images_dir = out_dir / images_dir
+        payload = json.loads(
+            (out_dir / "multi-page-final.json").read_text(encoding="utf-8")
+        )
+        doc = payload.get("doc") if isinstance(payload, dict) else None
+        rendered_pages = _rendered_page_indices(images_dir)
+        return validate_final_case(
+            doc,
+            rendered_pages=rendered_pages,
+            cfg=cfg,
+        ).ok
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+
+
+def _event_outputs_complete(
+    event: dict[str, Any], job: JobSpec, cfg: SynthConfig | None = None
+) -> bool:
     """Check every physical output recorded for a successful job."""
 
     outputs = _record_outputs(event)
@@ -427,6 +465,8 @@ def _event_outputs_complete(event: dict[str, Any], job: JobSpec) -> bool:
         except (TypeError, ValueError):
             return False
         if not output_is_complete(Path(raw_path), sample_seq):
+            return False
+        if cfg is not None and not _output_is_final_compatible(Path(raw_path), cfg):
             return False
     return True
 
@@ -564,6 +604,7 @@ def materialize_document(
     *,
     cleanup_assets: bool = True,
     origin_metadata: dict[str, Any] | None = None,
+    plans: TranslationBundle | None = None,
 ) -> dict:
     rewritten = _relink_images(rewritten, material)
     images_dir = out_dir / "images_path"
@@ -571,8 +612,17 @@ def materialize_document(
         shutil.rmtree(images_dir)
     layout = column_layout or choose_column_layout(cfg.column_layouts, seed)
     logger.info("layout=%s seq=%s seed=%s", layout, seq, seed)
-    placed = render_pages(rewritten, images_dir, cfg, column_layout=layout)
-    result = validate_doc(material.tree, placed, cfg, material=material)
+    render_kwargs: dict[str, Any] = {"column_layout": layout}
+    if getattr(cfg, "synchronize_bilingual_pairs", False):
+        render_kwargs["synchronize_pairs"] = True
+    placed = render_pages(rewritten, images_dir, cfg, **render_kwargs)
+    result = validate_doc(
+        material.tree,
+        placed,
+        cfg,
+        material=material,
+        plans=plans,
+    )
     if not result.ok:
         raise RuntimeError("; ".join(result.errors[:8]))
 
@@ -583,11 +633,23 @@ def materialize_document(
         cfg,
         seq=seq,
         origin_metadata=origin_metadata,
+        plans=plans,
     )
-    doc = json.loads((out_dir / "multi-page-final.json").read_text(encoding="utf-8"))["doc"]
-    projection_errors = validate_page_projection(doc)
-    if projection_errors:
-        raise RuntimeError("; ".join(projection_errors[:4]))
+    final_payload = json.loads(
+        (out_dir / "multi-page-final.json").read_text(encoding="utf-8")
+    )
+    doc = final_payload.get("doc") if isinstance(final_payload, dict) else None
+    rendered_pages = _rendered_page_indices(images_dir)
+    final_result = validate_final_case(
+        doc,
+        rendered_pages=rendered_pages,
+        cfg=cfg,
+    )
+    if not final_result.ok:
+        raise RuntimeError(
+            "final Trainer compatibility validation failed: "
+            + "; ".join(final_result.errors[:8])
+        )
 
     visualize_dir = out_dir / "visualize"
     if visualize_dir.exists():
@@ -619,6 +681,26 @@ def materialize_document(
     if cleanup_assets and Path(material.assets_dir).exists():
         shutil.rmtree(material.assets_dir, ignore_errors=True)
     stats = dict(result.stats)
+    stats.update(
+        {
+            "final_rendered_page_count": final_result.stats["rendered_page_count"],
+            "final_projection_error_count": final_result.stats[
+                "projection_error_count"
+            ],
+            "final_tree_error_count": final_result.stats["final_tree_error_count"],
+            "final_merge_error_count": final_result.stats["merge_error_count"],
+            "final_n_errors": final_result.stats["n_errors"],
+        }
+    )
+    if plans is not None:
+        stats.update(
+            {
+                "dropped_node_count": len(plans.dropped),
+                "translation_warning_count": len(plans.warnings),
+                "dropped_node_ids": list(plans.dropped),
+                "translation_warnings": list(plans.warnings),
+            }
+        )
     stats["column_layout"] = layout
     return {
         "path": str(out_dir.resolve()),
@@ -628,6 +710,29 @@ def materialize_document(
         "column_layout": layout,
         "stats": stats,
     }
+
+
+def _rendered_page_indices(images_dir: Path) -> list[int]:
+    """Return the contiguous zero-based page ledger produced by rendering."""
+
+    pages: list[int] = []
+    for path in Path(images_dir).glob("raw-page-*.png"):
+        match = _RAW_PAGE_RE.fullmatch(path.name)
+        if match is None:
+            raise RuntimeError(f"invalid rendered page filename: {path.name}")
+        page_number = int(match.group(1))
+        if page_number <= 0:
+            raise RuntimeError(f"invalid rendered page number: {path.name}")
+        pages.append(page_number - 1)
+    pages.sort()
+    if not pages:
+        raise RuntimeError(f"rendered page ledger is empty: {images_dir}")
+    expected = list(range(pages[-1] + 1))
+    if pages != expected:
+        raise RuntimeError(
+            f"rendered page ledger is not contiguous: {pages}"
+        )
+    return pages
 
 
 def generate_one(
@@ -642,9 +747,27 @@ def generate_one(
     try:
         material = load_material(case_dir, cfg, assets)
         logger.info("generate seq=%s seed=%s doc_id=%s", seq, seed, material.doc_id)
-        html = build_source_html(material, cfg)
-        rewritten = rewrite_html(html, cfg, seed=seed)
-        logger.info("rewrite done seq=%s", seq)
+        bundle: TranslationBundle | None = None
+        if (
+            hasattr(material, "blocks")
+            and hasattr(material, "tree")
+            and rewrite_html is _ORIGINAL_REWRITE_HTML
+        ):
+            bundle = translate_material(material, cfg, seed=seed)
+            rewritten = build_bilingual_html(material, bundle, cfg)
+            logger.info(
+                "structured translation done seq=%s dropped=%s warnings=%s",
+                seq,
+                len(bundle.dropped),
+                len(bundle.warnings),
+            )
+        else:
+            # Compatibility for injected legacy generators that only provide a
+            # doc_id/assets_dir stub. Real production Material always follows
+            # the structured path above.
+            html = build_source_html(material, cfg)
+            rewritten = rewrite_html(html, cfg, seed=seed)
+            logger.info("legacy rewrite done seq=%s", seq)
         variants: list[dict[str, Any]] = []
         variant_count = len(cfg.column_layouts)
         for variant_index, layout in enumerate(cfg.column_layouts):
@@ -657,6 +780,19 @@ def generate_one(
             out_dir.mkdir(parents=True)
             output_dirs.append(out_dir)
             (out_dir / "rewritten.html").write_text(rewritten, encoding="utf-8")
+            materialize_kwargs = {
+                "column_layout": layout,
+                "cleanup_assets": False,
+                "origin_metadata": {
+                    "source_doc_id": material.doc_id,
+                    "rewrite_seq": seq,
+                    "sample_seq": sample_seq,
+                    "column_layout": layout,
+                    "seed": seed,
+                },
+            }
+            if bundle is not None:
+                materialize_kwargs["plans"] = bundle
             variant = materialize_document(
                 material,
                 rewritten,
@@ -665,15 +801,7 @@ def generate_one(
                 cfg,
                 output_root,
                 out_dir,
-                column_layout=layout,
-                cleanup_assets=False,
-                origin_metadata={
-                    "source_doc_id": material.doc_id,
-                    "rewrite_seq": seq,
-                    "sample_seq": sample_seq,
-                    "column_layout": layout,
-                    "seed": seed,
-                },
+                **materialize_kwargs,
             )
             variant["rewrite_seq"] = seq
             variants.append(variant)
@@ -726,7 +854,7 @@ def run_batch(
         if (
             previous
             and previous.get("status") == "ok"
-            and _event_outputs_complete(previous, job)
+            and _event_outputs_complete(previous, job, cfg)
         ):
             continue
 
@@ -736,7 +864,9 @@ def run_batch(
                 job.seq,
                 len(cfg.column_layouts),
             )
-            if recovered:
+            if recovered and all(
+                _output_is_final_compatible(path, cfg) for path in recovered
+            ):
                 event = _recovered_event(job, recovered, previous)
                 append_progress(progress_path, event)
                 latest[job.job_id] = event
@@ -751,6 +881,15 @@ def run_batch(
             started,
             variants_per_job=len(cfg.column_layouts),
         )
+
+    # Remove stale successful records from the checkpoint before any pending
+    # job is regenerated. In particular, a phase-0-complete but final-invalid
+    # directory must not remain in synth_input_path.txt if the process is
+    # interrupted between resume discovery and the next terminal event.
+    for job in pending:
+        running = _running_event(job, latest.get(job.job_id))
+        append_progress(progress_path, running)
+        latest[job.job_id] = running
     _write_batch_checkpoint(
         output_root,
         jobs,
@@ -766,9 +905,6 @@ def run_batch(
     futures = {}
     try:
         for job in pending:
-            running = _running_event(job, latest.get(job.job_id))
-            append_progress(progress_path, running)
-            latest[job.job_id] = running
             futures[
                 executor.submit(
                     _run_job_with_retries,

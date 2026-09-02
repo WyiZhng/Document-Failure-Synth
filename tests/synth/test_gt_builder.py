@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
+
+import pytest
 
 from src.synth.gt_builder import build_gt
 from src.synth.material import IMAGE_CATEGORIES, load_material
 from src.synth.render import PlacedBlock
+from src.synth.translation_types import BlockPlan, TranslationBundle
 
 
 def _left(y1: float, y2: float) -> tuple[float, float, float, float]:
@@ -119,6 +123,7 @@ def test_cross_page_translation_makes_multipage_node(material_fixture, cfg, tmp_
     tree = json.loads((tmp_path / "multi-page-final.json").read_text())["doc"]
     node = _find_text_pair(tree)
     assert node["page_index"] == [0, 1]
+    assert node["id"].startswith("merge-")
 
 
 def test_split_zh_en_fragments_rebuild_one_logical_node(material_fixture, cfg, tmp_path):
@@ -170,7 +175,7 @@ def test_split_zh_en_fragments_rebuild_one_logical_node(material_fixture, cfg, t
     tree = json.loads((tmp_path / "multi-page-final.json").read_text())["doc"]
     node = next(node for node in _walk(tree) if len(node.get("member") or []) == 4)
 
-    assert node["page_index"] == [0, 1, 0, 1]
+    assert node["page_index"] == [0, 0, 1, 1]
     assert len(node["bbox"]) == len(node["member"]) == 4
     assert node["category"] == ["text"] * 4
 
@@ -250,6 +255,49 @@ def test_gt_preserves_virtual_link_target(tiny_case_with_link, cfg, tmp_path):
     assert label_ids == tree_ids
 
 
+def test_gt_preserves_geometry_bearing_empty_link_target(
+    tiny_case_with_link, cfg, tmp_path
+):
+    tree = json.loads(
+        (tiny_case_with_link / "multi-page-final-fillin.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    target = {
+        "id": "p1-empty-reference",
+        "page_index": [1],
+        "member": ["p1-empty-reference"],
+        "children": [],
+        "category": ["reference"],
+        "bbox": [[100, 100, 400, 160]],
+        "text": [""],
+        "is_virtual": False,
+        "link": False,
+        "link_to": [],
+    }
+    tree[0]["children"][0]["link_to"] = [target]
+    (tiny_case_with_link / "multi-page-final-fillin.json").write_text(
+        json.dumps(tree, ensure_ascii=False), encoding="utf-8"
+    )
+    material = load_material(tiny_case_with_link, cfg, tmp_path / "assets")
+    placed = [
+        block
+        for block in _placed_for_material(material, cfg)
+        if block.node_id != "p1-empty-reference"
+    ]
+
+    build_gt(material, placed, tmp_path / "out", cfg, seq=10)
+    tree = json.loads((tmp_path / "out" / "multi-page-final.json").read_text())["doc"]
+    anchor = next(node for node in _walk_with_links(tree) if node.get("link"))
+    rebuilt_target = anchor["link_to"][0]
+
+    assert rebuilt_target["is_virtual"] is False
+    assert rebuilt_target["id"] == "p1-empty-reference"
+    assert rebuilt_target["member"] == ["p1-empty-reference"]
+    assert rebuilt_target["category"] == ["reference"]
+    assert rebuilt_target["text"] == [""]
+
+
 def test_gt_preserves_link_target_with_split_translation(
     tiny_case_with_late_link, cfg, tmp_path
 ):
@@ -306,3 +354,61 @@ def test_gt_reuses_shared_target_output_id(tiny_case_with_shared_link, cfg, tmp_
     roots = [anchor["link_to"][0] for anchor in anchors]
     assert roots[0]["id"] == roots[1]["id"]
     assert roots[0]["children"][0]["id"] == roots[1]["children"][0]["id"]
+
+
+def test_gt_rebuilds_english_source_with_source_then_target_members(
+    material_fixture, cfg, tmp_path
+):
+    material = replace(
+        material_fixture,
+        blocks=[
+            replace(material_fixture.blocks[0], text="English title"),
+            replace(material_fixture.blocks[1], text="English body"),
+        ],
+    )
+    plans = TranslationBundle(
+        plans={
+            "p0-b1": BlockPlan(
+                "p0-b1", "paragraph_title", "English title", "en", "zh", "translate", "中文标题"
+            ),
+            "p0-b2": BlockPlan(
+                "p0-b2", "text", "English body", "en", "zh", "translate", "中文正文"
+            ),
+        },
+        dropped={},
+        warnings=[],
+    )
+    placed = [
+        PlacedBlock("p0-b1", "en", "paragraph_title", 0, _left(100, 150), "English title", 0),
+        PlacedBlock("p0-b1", "zh", "paragraph_title", 0, _right(100, 150), "中文标题", 1),
+        PlacedBlock("p0-b2", "en", "text", 0, _left(200, 250), "English body", 2),
+        PlacedBlock("p0-b2", "zh", "text", 0, _right(200, 250), "中文正文", 3),
+    ]
+
+    build_gt(material, placed, tmp_path / "out", cfg, seq=8, plans=plans)
+    tree = json.loads((tmp_path / "out" / "multi-page-final.json").read_text())["doc"]
+    node = _find_text_pair(tree)
+
+    assert len(node["member"]) == 2
+    assert node["member"][0].startswith("p0-b")
+    assert node["member"][0] != "p0-b2"
+    assert node["category"] == ["text", "text"]
+
+
+def test_gt_rejects_empty_link_target(
+    tiny_case_with_link, cfg, tmp_path
+):
+    tree = json.loads(
+        (tiny_case_with_link / "multi-page-final-fillin.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    target = tree[0]["children"][0]["link_to"][0]
+    target["children"] = []
+    (tiny_case_with_link / "multi-page-final-fillin.json").write_text(
+        json.dumps(tree, ensure_ascii=False), encoding="utf-8"
+    )
+    material = load_material(tiny_case_with_link, cfg, tmp_path / "assets")
+
+    with pytest.raises(ValueError, match="empty link target|materialized"):
+        build_gt(material, _placed_for_material(material, cfg), tmp_path / "out", cfg, seq=9)

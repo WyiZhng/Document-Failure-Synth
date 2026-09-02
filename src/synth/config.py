@@ -31,6 +31,7 @@ class LlmConfig:
     api_key_env: str
     temperature: float
     max_retries: int
+    batch_max_chars: int = 12000
 
 
 @dataclass
@@ -52,6 +53,10 @@ class SynthConfig:
     ocr: OcrConfig
     column_layouts: list[str] = field(default_factory=lambda: list(ALLOWED_COLUMN_LAYOUTS))
     max_workers: int = 4
+    # Production generation keeps each zh/en block pair on the same page
+    # whenever both blocks fit. The renderer API keeps its historical
+    # independent-column default unless this flag is enabled by the runner.
+    synchronize_bilingual_pairs: bool = False
 
 
 def load_config(path: str | Path) -> SynthConfig:
@@ -72,6 +77,9 @@ def load_config(path: str | Path) -> SynthConfig:
     max_workers = int(raw.get("max_workers", 4))
     if max_workers <= 0:
         raise ValueError("max_workers must be greater than 0")
+    batch_max_chars = int(llm_raw.get("batch_max_chars", 12000))
+    if batch_max_chars <= 0:
+        raise ValueError("batch_max_chars must be greater than 0")
 
     return SynthConfig(
         source_cases=list(raw_cases),
@@ -93,12 +101,16 @@ def load_config(path: str | Path) -> SynthConfig:
             api_key_env=str(llm_raw["api_key_env"]),
             temperature=float(llm_raw["temperature"]),
             max_retries=int(llm_raw["max_retries"]),
+            batch_max_chars=batch_max_chars,
         ),
         ocr=OcrConfig(
             url=str(ocr_raw.get("url") or "").strip(),
             timeout=int(ocr_raw.get("timeout") or 300),
         ),
         max_workers=max_workers,
+        synchronize_bilingual_pairs=bool(
+            raw.get("synchronize_bilingual_pairs", False)
+        ),
     )
 
 

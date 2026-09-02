@@ -72,6 +72,8 @@ def render_pages(
     out_images_dir: Path,
     cfg: SynthConfig,
     column_layout: str | None = None,
+    *,
+    synchronize_pairs: bool = False,
 ) -> list[PlacedBlock]:
     out_images_dir.mkdir(parents=True, exist_ok=True)
 
@@ -87,6 +89,7 @@ def render_pages(
         "margin": cfg.page.margin,
         "columnGap": cfg.page.column_gap,
         "columnLayout": layout,
+        "synchronizePairs": synchronize_pairs,
     }
 
     with sync_playwright() as playwright:

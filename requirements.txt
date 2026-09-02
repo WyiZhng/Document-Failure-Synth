@@ -4,5 +4,6 @@ beautifulsoup4
 lxml
 playwright
 openai
+socksio
 pytest
 # PaddleOCR 相关(M3 安装):paddlepaddle、paddleocr

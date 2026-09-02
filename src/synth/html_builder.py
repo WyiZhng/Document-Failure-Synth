@@ -5,6 +5,7 @@ from pathlib import Path
 
 from src.synth.config import SynthConfig
 from src.synth.material import Material
+from src.synth.translation_types import BlockPlan, TranslationBundle
 
 _BASE_STYLES = """
 body { font-family: 'Noto Serif CJK SC', 'Songti SC', serif; margin: 32px; }
@@ -16,6 +17,7 @@ div.block { min-height: 1px; }
 .block[data-category="header"], .block[data-category="footer"] { color: #555; font-size: 12px; }
 /* 译文用小一号字体:双语文档常见排式 */
 .block[data-lang="en"] { font-size: 0.82em; line-height: 1.45; color: #222; }
+.block[data-relation-only="true"] { visibility: hidden; min-height: 1px; height: 1px; }
 img.block { display: block; max-width: 100%; height: auto; }
 """.strip()
 
@@ -64,5 +66,117 @@ def build_source_html(material: Material, cfg: SynthConfig) -> str:
     if current_page is not None:
         parts.append("</section>")
 
+    parts.extend(["</article>", "</body>", "</html>"])
+    return "\n".join(parts)
+
+
+def _block_attrs(block_id: str, category: str, language: str) -> str:
+    return (
+        f'data-node-id="{html.escape(block_id, quote=True)}" '
+        f'data-category="{html.escape(category, quote=True)}" '
+        f'data-lang="{html.escape(language, quote=True)}"'
+    )
+
+
+def _append_visible_block(
+    parts: list[str],
+    material: Material,
+    block,
+    language: str,
+    text: str,
+    *,
+    relation_only: bool = False,
+) -> None:
+    attrs = _block_attrs(block.id, block.category, language)
+    if relation_only:
+        attrs += ' data-relation-only="true"'
+    if block.image_path:
+        src = html.escape(_image_src(material, block.image_path), quote=True)
+        parts.append(f'<img class="block" {attrs} src="{src}" alt="" />')
+    else:
+        parts.append(f'<div class="block" {attrs}>{html.escape(text)}</div>')
+
+
+def build_bilingual_html(
+    material: Material,
+    bundle: TranslationBundle,
+    cfg: SynthConfig,
+) -> str:
+    """Build bilingual source HTML from Material and an immutable bundle."""
+
+    del cfg  # layout is selected by the renderer, not by HTML assembly
+    parts = [
+        "<!DOCTYPE html>",
+        '<html lang="zh">',
+        "<head>",
+        '<meta charset="utf-8" />',
+        "<title>source</title>",
+        f"<style>{_BASE_STYLES}</style>",
+        "</head>",
+        "<body>",
+        '<article class="source-doc">',
+    ]
+
+    current_page: int | None = None
+    for block in material.blocks:
+        plan: BlockPlan | None = bundle.plan_for(block.id)
+        if plan is None:
+            # A missing plan is only expected for an empty leaf. Keep this
+            # fallback source-only behavior for callers constructing bundles
+            # manually, while never fabricating target text.
+            if not block.text.strip() and not block.image_path:
+                continue
+            source_lang = "zh"
+            action = "source_only"
+            target_lang = None
+            target_text = None
+        else:
+            if (
+                not block.text.strip()
+                and not block.image_path
+                and plan.action != "source_only"
+            ):
+                # Empty leaves that were dropped by translation do not get a
+                # physical block. Empty relation-only source plans do.
+                continue
+            source_lang = plan.source_lang
+            action = plan.action
+            target_lang = plan.target_lang
+            target_text = plan.target_text
+
+        if block.page != current_page:
+            if current_page is not None:
+                parts.append("</section>")
+            current_page = block.page
+            parts.append(f'<section class="src-page" data-src-page="{current_page}">')
+
+        relation_only = (
+            not block.text.strip()
+            and not block.image_path
+            and plan is not None
+            and plan.action == "source_only"
+        )
+        if not block.text.strip() and not block.image_path and not relation_only:
+            continue
+
+        _append_visible_block(
+            parts,
+            material,
+            block,
+            source_lang,
+            block.text,
+            relation_only=relation_only,
+        )
+        if (
+            not block.image_path
+            and action in {"translate", "copy"}
+            and target_lang in {"zh", "en"}
+            and isinstance(target_text, str)
+            and target_text.strip()
+        ):
+            _append_visible_block(parts, material, block, target_lang, target_text)
+
+    if current_page is not None:
+        parts.append("</section>")
     parts.extend(["</article>", "</body>", "</html>"])
     return "\n".join(parts)

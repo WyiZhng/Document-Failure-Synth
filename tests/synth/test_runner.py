@@ -258,6 +258,29 @@ def _write_complete_output(path: Path, seq: int) -> None:
         (path / name).write_text(json.dumps(payload), encoding="utf-8")
 
 
+def _write_generated_like_output(path: Path, seq: int, doc: list[dict]) -> None:
+    images = path / "images_path"
+    images.mkdir(parents=True, exist_ok=True)
+    (images / "raw-page-1.png").write_bytes(b"png")
+    (path / "origin.json").write_text(
+        json.dumps(
+            {
+                "doc_id": f"doc_{seq}",
+                "task_id": f"synth_task_{seq:03d}",
+                "images_path": str(images.resolve()),
+            }
+        ),
+        encoding="utf-8",
+    )
+    (path / "rewritten.html").write_text("<html></html>", encoding="utf-8")
+    for name, payload in {
+        "prelabel.json": {"pages": []},
+        "label.json": {"pages": []},
+        "multi-page-final.json": {"doc": doc},
+    }.items():
+        (path / name).write_text(json.dumps(payload), encoding="utf-8")
+
+
 def test_generate_one_rewrites_once_and_materializes_all_layouts(
     tmp_path: Path,
     monkeypatch,
@@ -470,6 +493,256 @@ def test_resume_requeues_corrupt_success_output(tmp_path: Path):
     (output / "synth_001_doc_1" / "label.json").unlink()
     runner.run_batch(cfg, workspace=tmp_path, generate_fn=generate)
     assert calls == [1, 1]
+
+
+def test_resume_requeues_final_incompatible_generated_output(tmp_path: Path):
+    calls: list[int] = []
+    listings_seen_by_retry: list[str] = []
+
+    invalid = {
+        "id": "p0-fake1",
+        "page_index": [0],
+        "member": [],
+        "children": [],
+        "category": "list_item",
+        "bbox": [],
+        "text": "",
+        "is_virtual": True,
+        "link": False,
+        "link_to": [],
+    }
+    valid = {
+        "id": "p0-b1",
+        "page_index": [0],
+        "member": ["p0-b1"],
+        "children": [],
+        "category": ["text"],
+        "bbox": [[40, 40, 400, 120]],
+        "text": [""],
+        "is_virtual": False,
+        "link": False,
+        "link_to": [],
+    }
+
+    def generate(case_dir, seq, seed, cfg, output_root):
+        del case_dir, seed, cfg
+        calls.append(seq)
+        if len(calls) == 2:
+            listings_seen_by_retry.append(
+                (output_root / "synth_input_path.txt").read_text(encoding="utf-8")
+            )
+        path = output_root / f"synth_{seq:03d}_doc_{seq}"
+        _write_generated_like_output(path, seq, [invalid if len(calls) == 1 else valid])
+        return {"path": str(path), "doc_id": f"doc_{seq}", "seed": 0, "stats": {}}
+
+    cfg = _cfg(tmp_path)
+    runner.run_batch(cfg, workspace=tmp_path, generate_fn=generate)
+    second = runner.run_batch(cfg, workspace=tmp_path, generate_fn=generate)
+
+    assert calls == [1, 1]
+    assert listings_seen_by_retry == [""]
+    assert second["n_ok"] == 1
+    assert runner._output_is_final_compatible(
+        Path(cfg.output_root) / "synth_001_doc_1", cfg
+    )
+
+
+def test_materialize_rejects_empty_virtual_after_gt_build(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    cfg = _cfg(tmp_path)
+    material = SimpleNamespace(
+        doc_id="doc-test",
+        blocks=[],
+        tree=[],
+        assets_dir=tmp_path / "assets",
+    )
+    out_dir = tmp_path / "out" / "invalid"
+
+    def fake_render(html, images_dir, config, column_layout=None):
+        del html, config, column_layout
+        images_dir.mkdir(parents=True, exist_ok=True)
+        (images_dir / "raw-page-1.png").write_bytes(b"png")
+        return []
+
+    def fake_gt(*args, **kwargs):
+        del args, kwargs
+        out_dir.joinpath("multi-page-final.json").write_text(
+            json.dumps(
+                {
+                    "doc": [
+                        {
+                            "id": "p0-fake1",
+                            "page_index": [0],
+                            "member": [],
+                            "children": [],
+                            "category": "list_item",
+                            "bbox": [],
+                            "text": "",
+                            "is_virtual": True,
+                            "link": False,
+                            "link_to": [],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(runner, "render_pages", fake_render)
+    monkeypatch.setattr(runner, "validate_doc", lambda *args, **kwargs: SimpleNamespace(ok=True, errors=[], stats={}))
+    monkeypatch.setattr(runner, "build_gt", fake_gt)
+    monkeypatch.setattr(runner, "draw_overlays", lambda *args, **kwargs: None)
+    monkeypatch.setattr(runner, "_ocr_candidates", lambda config: [SimpleNamespace(url="fake")])
+    monkeypatch.setattr(runner, "build_prelabel", lambda *args, **kwargs: {"pages": []})
+
+    with pytest.raises(RuntimeError, match="empty|children"):
+        runner.materialize_document(
+            material,
+            "<html></html>",
+            1,
+            1,
+            cfg,
+            tmp_path / "out",
+            out_dir,
+            column_layout="zh-en",
+        )
+
+
+def test_materialize_rejects_final_tree_page_without_rendered_image(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    cfg = _cfg(tmp_path)
+    material = SimpleNamespace(
+        doc_id="doc-test",
+        blocks=[],
+        tree=[],
+        assets_dir=tmp_path / "assets",
+    )
+    out_dir = tmp_path / "out" / "invalid-page"
+
+    def fake_render(html, images_dir, config, column_layout=None):
+        del html, config, column_layout
+        images_dir.mkdir(parents=True, exist_ok=True)
+        (images_dir / "raw-page-1.png").write_bytes(b"png")
+        return []
+
+    def fake_gt(*args, **kwargs):
+        del args, kwargs
+        out_dir.joinpath("multi-page-final.json").write_text(
+            json.dumps(
+                {
+                    "doc": [
+                        {
+                            "id": "p2-b1",
+                            "page_index": [2],
+                            "member": ["p2-b1"],
+                            "children": [],
+                            "category": ["text"],
+                            "bbox": [[40, 40, 400, 120]],
+                            "text": [""],
+                            "is_virtual": False,
+                            "link": False,
+                            "link_to": [],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(runner, "render_pages", fake_render)
+    monkeypatch.setattr(
+        runner,
+        "validate_doc",
+        lambda *args, **kwargs: SimpleNamespace(ok=True, errors=[], stats={}),
+    )
+    monkeypatch.setattr(runner, "build_gt", fake_gt)
+
+    with pytest.raises(RuntimeError, match="rendered page|page 2"):
+        runner.materialize_document(
+            material,
+            "<html></html>",
+            1,
+            1,
+            cfg,
+            tmp_path / "out",
+            out_dir,
+            column_layout="zh-en",
+        )
+
+
+def test_materialize_accepts_final_tree_with_rendered_pages(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    cfg = _cfg(tmp_path)
+    material = SimpleNamespace(
+        doc_id="doc-test",
+        blocks=[],
+        tree=[],
+        assets_dir=tmp_path / "assets",
+    )
+    out_dir = tmp_path / "out" / "valid"
+
+    def fake_render(html, images_dir, config, column_layout=None):
+        del html, config, column_layout
+        images_dir.mkdir(parents=True, exist_ok=True)
+        (images_dir / "raw-page-1.png").write_bytes(b"png")
+        return []
+
+    def fake_gt(*args, **kwargs):
+        del args, kwargs
+        out_dir.joinpath("multi-page-final.json").write_text(
+            json.dumps(
+                {
+                    "doc": [
+                        {
+                            "id": "p0-b1",
+                            "page_index": [0],
+                            "member": ["p0-b1"],
+                            "children": [],
+                            "category": ["text"],
+                            "bbox": [[40, 40, 400, 120]],
+                            "text": [""],
+                            "is_virtual": False,
+                            "link": False,
+                            "link_to": [],
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(runner, "render_pages", fake_render)
+    monkeypatch.setattr(runner, "validate_doc", lambda *args, **kwargs: SimpleNamespace(ok=True, errors=[], stats={}))
+    monkeypatch.setattr(runner, "build_gt", fake_gt)
+    monkeypatch.setattr(runner, "draw_overlays", lambda *args, **kwargs: None)
+    monkeypatch.setattr(runner, "_ocr_candidates", lambda config: [SimpleNamespace(url="fake")])
+    monkeypatch.setattr(runner, "build_prelabel", lambda *args, **kwargs: {"pages": []})
+
+    result = runner.materialize_document(
+        material,
+        "<html></html>",
+        1,
+        1,
+        cfg,
+        tmp_path / "out",
+        out_dir,
+        column_layout="zh-en",
+    )
+
+    assert result["path"] == str(out_dir.resolve())
+
+
+def test_rendered_page_indices_require_contiguous_zero_based_ledger(tmp_path):
+    images = tmp_path / "images"
+    images.mkdir()
+    (images / "raw-page-1.png").write_bytes(b"png")
+    (images / "raw-page-3.png").write_bytes(b"png")
+
+    with pytest.raises(RuntimeError, match="not contiguous"):
+        runner._rendered_page_indices(images)
 
 
 def test_resume_rejects_changed_semantic_config(tmp_path: Path):

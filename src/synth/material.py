@@ -238,6 +238,19 @@ def collect_link_graph(tree: list[dict]) -> LinkGraph:
 
         for target in link_to:
             target_id = _node_id(target, context=f"link_to on node {node_id!r}")
+            if not any(
+                field in target
+                for field in (
+                    "page_index",
+                    "member",
+                    "children",
+                    "category",
+                    "bbox",
+                    "text",
+                    "is_virtual",
+                )
+            ):
+                raise ValueError(f"unresolved link_to target {target_id!r}")
             target_node, changed = register_node(target)
             del target_node
             relation_key = (node_id, target_id)
@@ -269,25 +282,10 @@ def collect_link_graph(tree: list[dict]) -> LinkGraph:
     for node_id in nodes_by_id:
         detect_cycle(node_id, (), set())
 
-    def has_real_member(node: dict, seen: set[str]) -> bool:
-        node_id = str(node["id"])
-        if node_id in seen:
-            return False
-        seen.add(node_id)
-        if not node.get("is_virtual") and _as_list(node.get("member")):
-            return True
-        return any(
-            has_real_member(child, seen)
-            for child in node.get("children") or []
-            if isinstance(child, dict)
-        )
-
     for target_id in target_root_ids:
         target = nodes_by_id.get(target_id)
         if target is None:
             raise ValueError(f"unresolved link_to target {target_id!r}")
-        if not has_real_member(target, set()):
-            raise ValueError(f"link_to target {target_id!r} has no materialized node")
 
     def block_signature(block: dict[str, Any]) -> tuple[Any, ...]:
         return (

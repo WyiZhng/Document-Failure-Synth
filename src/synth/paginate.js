@@ -8,6 +8,7 @@
 function paginateDocument(config) {
   const { width, height, margin, columnGap } = config;
   const layout = config.columnLayout === "en-zh" ? "en-zh" : "zh-en";
+  const synchronizePairs = Boolean(config.synchronizePairs);
 
   const allNodes = Array.from(document.querySelectorAll("[data-node-id]"));
   const items = allNodes.map((el, order) => ({
@@ -45,6 +46,7 @@ function paginateDocument(config) {
   function applyColumnSizing(el) {
     if (el.tagName === "IMG") {
       el.style.maxWidth = `${colW}px`;
+      el.style.maxHeight = `${contentH}px`;
       el.style.width = "auto";
       el.style.height = "auto";
     } else {
@@ -204,9 +206,68 @@ function paginateDocument(config) {
     }
   }
 
+  function alignColumnToPage(side, page) {
+    const state = columns[side];
+    while (state.page < page) {
+      advanceColumn(side);
+    }
+  }
+
+  function alignPairPage() {
+    const page = Math.max(columns.left.page, columns.right.page);
+    alignColumnToPage("left", page);
+    alignColumnToPage("right", page);
+    return page;
+  }
+
+  function fullItemHeight(item) {
+    if (!item) return 0;
+    return measureHeight(item.el, canSplit(item) ? item.text : null);
+  }
+
+  function needsPairPageBreak(item, side) {
+    if (!item) return false;
+    const state = columns[side];
+    const fullH = fullItemHeight(item);
+    // A block that can be split and is taller than one whole page must start
+    // where it currently is; placeItem will split it. Every ordinary block
+    // that does not fit moves the whole pair to the next page instead.
+    return fullH <= contentH && !fits(state.y, fullH);
+  }
+
+  function placePair(pair) {
+    if (!pair.zh || !pair.en) {
+      if (pair.zh) placeItem(pair.zh);
+      if (pair.en) placeItem(pair.en);
+      alignPairPage();
+      return;
+    }
+
+    alignPairPage();
+    while (
+      needsPairPageBreak(pair.zh, sideOf(pair.zh.lang)) ||
+      needsPairPageBreak(pair.en, sideOf(pair.en.lang))
+    ) {
+      advanceColumn("left");
+      advanceColumn("right");
+    }
+
+    // If one side is an oversized splittable block, it may extend to a later
+    // page. The other side is aligned to that continuation page before it is
+    // placed, so subsequent pairs still share a page boundary.
+    placeItem(pair.zh);
+    alignColumnToPage(sideOf(pair.en.lang), columns[sideOf(pair.zh.lang)].page);
+    placeItem(pair.en);
+    alignPairPage();
+  }
+
   for (const pair of pairs) {
-    if (pair.zh) placeItem(pair.zh);
-    if (pair.en) placeItem(pair.en);
+    if (synchronizePairs) {
+      placePair(pair);
+    } else {
+      if (pair.zh) placeItem(pair.zh);
+      if (pair.en) placeItem(pair.en);
+    }
   }
 
   document.body.innerHTML = "";

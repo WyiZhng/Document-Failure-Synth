@@ -6,8 +6,14 @@ from dataclasses import replace
 import pytest
 
 from src.synth.material import IMAGE_CATEGORIES, load_material
+from src.synth.merge_compat import validate_merge_projection
 from src.synth.render import PlacedBlock
-from src.synth.validate import validate_doc
+from src.synth.translation_types import BlockPlan, TranslationBundle
+from src.synth.validate import (
+    validate_doc,
+    validate_final_case,
+    validate_final_tree,
+)
 from tests.synth.conftest import _base_tree
 
 
@@ -353,3 +359,289 @@ def test_later_source_pages_are_included_when_unlimited(cfg):
     ]
     result = validate_doc(tree, placed, cfg)
     assert result.ok
+
+
+def test_bundle_validates_english_source_to_chinese_target(material_fixture, cfg):
+    material = replace(
+        material_fixture,
+        blocks=[
+            replace(material_fixture.blocks[0], text="English title"),
+            replace(material_fixture.blocks[1], text="English body"),
+        ],
+    )
+    plans = TranslationBundle(
+        plans={
+            "p0-b1": BlockPlan(
+                "p0-b1", "paragraph_title", "English title", "en", "zh", "translate", "中文标题"
+            ),
+            "p0-b2": BlockPlan(
+                "p0-b2", "text", "English body", "en", "zh", "translate", "中文正文"
+            ),
+        },
+        dropped={},
+        warnings=[],
+    )
+    placed = [
+        PlacedBlock("p0-b1", "en", "paragraph_title", 0, _left_bbox(100, 150), "English title", 0),
+        PlacedBlock("p0-b1", "zh", "paragraph_title", 0, _right_bbox(100, 150), "中文标题", 1),
+        PlacedBlock("p0-b2", "en", "text", 0, _left_bbox(200, 250), "English body", 2),
+        PlacedBlock("p0-b2", "zh", "text", 0, _right_bbox(200, 250), "中文正文", 3),
+    ]
+
+    result = validate_doc(material.tree, placed, cfg, material=material, plans=plans)
+
+    assert result.ok
+    assert result.stats["translation_cross_page"] == 0
+    assert result.stats["en_cross_page"] == 0
+
+
+def test_bundle_accepts_copy_and_dropped_target(material_fixture, cfg):
+    plans = TranslationBundle(
+        plans={
+            "p0-b1": BlockPlan(
+                "p0-b1", "paragraph_title", "标题一", "zh", "en", "copy", "标题一"
+            ),
+            "p0-b2": BlockPlan(
+                "p0-b2", "text", "正文内容", "zh", "en", "translate", None
+            ),
+        },
+        dropped={"p0-b2": "translation failed"},
+        warnings=[{"node_id": "p0-b2", "attempts": 2}],
+    )
+    placed = [
+        PlacedBlock("p0-b1", "zh", "paragraph_title", 0, _left_bbox(100, 150), "标题一", 0),
+        PlacedBlock("p0-b1", "en", "paragraph_title", 0, _right_bbox(100, 150), "标题一", 1),
+        PlacedBlock("p0-b2", "zh", "text", 0, _left_bbox(200, 250), "正文内容", 2),
+    ]
+
+    result = validate_doc(
+        material_fixture.tree,
+        placed,
+        cfg,
+        material=material_fixture,
+        plans=plans,
+    )
+
+    assert result.ok
+    assert result.stats["dropped_node_ids"] == ["p0-b2"]
+    assert result.stats["translation_warning_count"] == 1
+
+
+def test_bundle_wrong_target_language_fails(material_fixture, cfg):
+    plans = TranslationBundle(
+        plans={
+            "p0-b1": BlockPlan(
+                "p0-b1", "paragraph_title", "标题一", "zh", "en", "translate", "Title One"
+            ),
+            "p0-b2": BlockPlan(
+                "p0-b2", "text", "正文内容", "zh", "en", "translate", "Body content"
+            ),
+        },
+        dropped={},
+        warnings=[],
+    )
+    placed = _valid_placed()
+    placed[1] = PlacedBlock(
+        "p0-b1", "en", "paragraph_title", 0, _right_bbox(100, 150), "这是中文", 1
+    )
+
+    result = validate_doc(
+        material_fixture.tree,
+        placed,
+        cfg,
+        material=material_fixture,
+        plans=plans,
+    )
+
+    assert not result.ok
+    assert any("target text mismatch" in error or "target-language" in error for error in result.errors)
+
+
+def _final_real(
+    node_id: str = "p0-b1",
+    *,
+    page: int = 0,
+    category: str = "text",
+    link: bool = False,
+    link_to: list[dict] | None = None,
+) -> dict:
+    return {
+        "id": node_id,
+        "page_index": [page],
+        "member": [node_id],
+        "children": [],
+        "category": [category],
+        "bbox": [[40, 40, 400, 120]],
+        "text": [""],
+        "is_virtual": False,
+        "link": link,
+        "link_to": link_to or [],
+    }
+
+
+def _final_virtual(node_id: str = "p0-fake1", child: dict | None = None) -> dict:
+    return {
+        "id": node_id,
+        "page_index": [0],
+        "member": [],
+        "children": [] if child is None else [child],
+        "category": "list_item",
+        "bbox": [],
+        "text": "",
+        "is_virtual": True,
+        "link": False,
+        "link_to": [],
+    }
+
+
+def test_final_tree_accepts_materialized_virtual_and_empty_text(cfg):
+    doc = [_final_virtual(child=_final_real("p0-b2", category="table"))]
+
+    errors = validate_final_tree(
+        doc,
+        rendered_pages={0},
+        page_width=cfg.page.width,
+        page_height=cfg.page.height,
+    )
+
+    assert errors == []
+
+
+def test_final_tree_rejects_empty_virtual(cfg):
+    errors = validate_final_tree(
+        [_final_virtual()],
+        rendered_pages={0},
+        page_width=cfg.page.width,
+        page_height=cfg.page.height,
+    )
+
+    assert errors and any("p0-fake1" in error and "children" in error for error in errors)
+
+
+def test_final_tree_rejects_page_not_in_rendered_page_ledger(cfg):
+    errors = validate_final_tree(
+        [_final_real(page=2)],
+        rendered_pages={0, 1},
+        page_width=cfg.page.width,
+        page_height=cfg.page.height,
+    )
+
+    assert errors and any("page 2" in error and "rendered" in error for error in errors)
+
+
+def test_final_tree_rejects_malformed_aligned_arrays(cfg):
+    node = _final_real()
+    node["bbox"] = [[40, 40, 400, 120], [40, 130, 400, 200]]
+
+    errors = validate_final_tree(
+        [node],
+        rendered_pages={0},
+        page_width=cfg.page.width,
+        page_height=cfg.page.height,
+    )
+
+    assert errors and any("aligned" in error and "p0-b1" in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    "mutate,needle",
+    [
+        (lambda node: node.update({"link": True, "link_to": []}), "link_to"),
+        (
+            lambda node: node.update(
+                {
+                    "link": True,
+                    "link_to": [{"id": "target", "children": []}],
+                }
+            ),
+            "target",
+        ),
+    ],
+    ids=["anchor_without_target", "empty_target_snapshot"],
+)
+def test_final_tree_rejects_bad_link(mutate, needle, cfg):
+    node = _final_real(link=False)
+    mutate(node)
+
+    errors = validate_final_tree(
+        [node],
+        rendered_pages={0},
+        page_width=cfg.page.width,
+        page_height=cfg.page.height,
+    )
+
+    assert errors and any(needle in error for error in errors)
+
+
+def test_final_tree_accepts_geometry_bearing_reference_link(cfg):
+    target = _final_real("p1-reference", page=1, category="reference")
+    anchor = _final_real("p0-anchor", link=True, link_to=[target])
+
+    errors = validate_final_tree(
+        [anchor],
+        rendered_pages={0, 1},
+        page_width=cfg.page.width,
+        page_height=cfg.page.height,
+    )
+
+    assert errors == []
+
+
+def test_final_case_composes_projection_validation(cfg):
+    parent = _final_real("p0-b1", page=0)
+    parent["page_index"] = [0, 2]
+    parent["member"] = ["p0-b1", "p2-b1"]
+    parent["category"] = ["text", "text"]
+    parent["bbox"] = [[40, 40, 400, 120], [40, 40, 400, 120]]
+    parent["text"] = ["", ""]
+    middle = _final_virtual("p1-fake1", _final_real("p1-b1", page=1))
+    middle["children"][0]["page_index"] = [1, 2]
+    middle["children"][0]["member"] = ["p1-b1", "p2-b2"]
+    middle["children"][0]["category"] = ["text", "text"]
+    middle["children"][0]["bbox"] = [[40, 40, 400, 120], [40, 40, 400, 120]]
+    sibling = _final_real("p1-b2", page=1)
+    sibling["page_index"] = [1, 2]
+    sibling["member"] = ["p1-b2", "p2-b3"]
+    sibling["category"] = ["text", "text"]
+    sibling["bbox"] = [[40, 40, 400, 120], [40, 40, 400, 120]]
+    sibling["text"] = ["", ""]
+    parent["children"] = [middle, sibling]
+
+    result = validate_final_case(
+        [parent],
+        rendered_pages={0, 1, 2},
+        cfg=cfg,
+    )
+
+    assert not result.ok
+    assert any("parent leaves preorder" in error for error in result.errors)
+
+
+def test_merge_compat_accepts_trainer_merge_id():
+    node = _final_real("merge-p0-b1", page=0)
+    node["page_index"] = [0, 1]
+    node["member"] = ["p0-b1", "p1-b1"]
+    node["category"] = ["text", "text"]
+    node["bbox"] = [
+        [40, 40, 400, 120],
+        [40, 40, 400, 120],
+    ]
+    node["text"] = ["", ""]
+
+    assert validate_merge_projection([node]) == []
+
+
+def test_merge_compat_rejects_non_merge_id_for_cross_page_node():
+    node = _final_real("p0-b1", page=0)
+    node["page_index"] = [0, 1]
+    node["member"] = ["p0-b1", "p1-b1"]
+    node["category"] = ["text", "text"]
+    node["bbox"] = [
+        [40, 40, 400, 120],
+        [40, 40, 400, 120],
+    ]
+    node["text"] = ["", ""]
+
+    errors = validate_merge_projection([node])
+
+    assert errors and any("merged tree" in error for error in errors)
