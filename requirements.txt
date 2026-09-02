@@ -1,8 +1,13 @@
-pyyaml
-pillow
-beautifulsoup4
-lxml
-playwright
-openai
-pytest
-# PaddleOCR 相关(M3 安装):paddlepaddle、paddleocr
+PyYAML==6.0.3
+Pillow==12.3.0
+beautifulsoup4==4.15.0
+lxml==6.1.2
+playwright==1.62.0
+openai==3.3.0
+pytest==9.1.1
+requests==2.32.5
+socksio==1.0.0
+
+# PaddleOCR 本地服务的可选依赖，不放入基础镜像:
+# paddlepaddle
+# paddleocr

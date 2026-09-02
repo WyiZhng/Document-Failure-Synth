@@ -1,0 +1,15 @@
+services:
+  synth:
+    image: ${SYNTH_IMAGE:-document-failure-synth:local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      PLAYWRIGHT_BROWSERS_PATH: /app/.playwright-browsers
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config:ro
+    init: true
+    shm_size: "1gb"
